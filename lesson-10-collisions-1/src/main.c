@@ -1,550 +1,430 @@
 /**
- *      @Title:  Leccion 10 - "Colisiones (1)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 10 - "Collisions (1)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
-#include "sprites.h"  //carga sprites
+#include "sprites.h"
 
-//Constantes
-    //primera parte
-    #define TOLERANCIA 10   //distancia a partir de la cual hay colision (de cero a TOLERANCIA)
-    //segunda parte
-    #define SONIC_IDLE      0
-    #define SONIC_IDLE2     1
-    #define SONIC_IDLE3     2
-    //tercera parte
-    #define MAX_BALAS       10  //num de balas en pantalla
+// collision tolerance radius (pixels)
+#define TOLERANCE   10
 
-//Declaracion de funciones
+// Sonic still-frame indices within animation 0
+#define SONIC_IDLE  0
+#define SONIC_IDLE2 1
+#define SONIC_IDLE3 2
 
-    //primera parte
-    static void handleInput();
-    static void muestra_posiciones();
-    void mi_hblank();
-    //segunda parte
-    static void chequea_colision1();
-    static void chequea_colision2();
-    static void handleInput_parte2();
-    //tercera parte
-    static void chequea_colision3();
-    static void chequea_colision4();
-    static void handleInput_parte3();
+// maximum simultaneous bullets on screen (part 3)
+#define MAX_BULLETS 10
 
+// function declarations — part 1
+static void handleInputPart1( void );
+static void drawPositions( void );
+void hblankCallback( void );
 
-//Declaracion de variables
+// function declarations — part 2
+static void checkCollision1( void );
+static void checkCollision2( void );
+static void handleInputPart2( void );
 
-    //primera parte
+// function declarations — part 3
+static void checkCollision3( void );
+static void checkCollision4( void );
+static void handleInputPart3( void );
 
-    //Punteros a sprite
-    Sprite* mi_bala;
-    Sprite* otra_bala;
+// part 1: two bullet sprites
+Sprite *bulletSprite;
+Sprite *bulletSprite2;
 
-    //Posicion inicial en pantalla de los sprites
-    int bala_posx = 64;
-    int bala_posy = 145;
-    int bala2_posx = 100;
-    int bala2_posy = 100;
+int bulletPosx  = 64;
+int bulletPosy  = 145;
+int bullet2Posx = 100;
+int bullet2Posy = 100;
 
-    //(0: colision HW, 1: colision POR TOLERANCI)
-    int seleccion_tipo_colision = 0;
+// 0: HW collision flag,  1: distance-based collision
+int collisionType = 0;
 
-    //segunda parte
+// part 2: Sonic sprite
+Sprite *sonicSprite;
 
-    //Punteros a sprite
-    Sprite* mi_sonic;
+int sonicPosx = 200;
+int sonicPosy =  85;
 
-    //Posicion inicial en pantalla de los sprites
-    int sonic_posx = 200;
-    int sonic_posy = 85;
+// axis-aligned bounding box used for box collision checks
+struct {
+    int x1, y1, x2, y2;
+} collisionBox;
 
-    //Caja de colisiones
-    //4 puntos que definen un rectangulo con el cual vamos a
-    // detectar colision si la bala está dentro de él
-    struct{
-
-        int x1, y1, x2, y2;
-
-    }CajaColision;
-
-    //tercera parte
-    Sprite* mi_MuchasBalas[MAX_BALAS];
-    fix32 MuchasBalas_posx[MAX_BALAS];
-    fix32 MuchasBalas_posy[MAX_BALAS];
+// part 3: bullet array
+Sprite *bullets[MAX_BULLETS];
+fix32   bulletsPosx[MAX_BULLETS];
+fix32   bulletsPosy[MAX_BULLETS];
 
 
+int main( bool hard ) {
 
+    /****************** PART 1: HW COLLISION AND DISTANCE COLLISION ******************/
 
-
-
-
-int main()
-{
-
-    /****************** PARTE 1: COLISION HW y por DISTANCIA ******************/
-
-    //pone la pantalla a 320x224
     VDP_setScreenWidth320();
 
-    //inicializa motor de sprites
     SPR_init();
 
-    //recoge la paleta de la bala
-    PAL_setPalette(PAL1,bala_sprite.palette->data, CPU);
+    PAL_setPalette( PAL1, bala_sprite.palette->data, CPU );
 
-    //añade los dos sprites de las balas
-    mi_bala   = SPR_addSprite(&bala_sprite, bala_posx,  bala_posy,  TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
-    otra_bala = SPR_addSprite(&bala_sprite, bala2_posx, bala2_posx, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
+    bulletSprite  = SPR_addSprite( &bala_sprite, bulletPosx,  bulletPosy,  TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    bulletSprite2 = SPR_addSprite( &bala_sprite, bullet2Posx, bullet2Posx, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
-    //AYUDA en pantalla
-    VDP_drawText("COLISIONES HW y por DISTANCIA   ",  2, 3);
-    VDP_drawText("A - Colision bit HW del VDP     ",  2, 4);
-    VDP_drawText("B - Colision por DISTANCIA      ",  2, 5);
-    VDP_drawText("Pulsa - START - para continuar  ",  2, 26);
+    VDP_drawText( "HW AND DISTANCE COLLISION        ", 2, 3  );
+    VDP_drawText( "A - HW VDP collision bit         ", 2, 4  );
+    VDP_drawText( "B - Distance-based collision     ", 2, 5  );
+    VDP_drawText( "Press - START - to continue      ", 2, 26 );
 
-    SYS_setHIntCallback(mi_hblank); //Define la funcion a lanzar cuando se de la interrupcion
-    VDP_setHIntCounter(8);		    //Cada 8 scanlines, se lanzará la interrupcion horizontal
-    VDP_setHInterrupt(1);		    //Activa la interrupcion horizontal (comenzamos buscando colision HW)
+    SYS_setHIntCallback( hblankCallback );
+    VDP_setHIntCounter( 8 );
+    VDP_setHInterrupt( 1 );
 
-    //Bucle principal primera parte
-    while(TRUE)
-    {
-        //recoge la entrada de los mandos
-        handleInput();
-            //si pulsamos START salimos del bucle y vamos a la parte2
-            u16 value = JOY_readJoypad(JOY_1);
-            if (value & BUTTON_START) break;
+    while ( TRUE ) {
 
-        //Colision HW
-        if(seleccion_tipo_colision == 0)
-        {
-            VDP_drawText("Bit Colision HW?     ",  2, 20);
-            if(GET_VDP_STATUS(VDP_SPRCOLLISION_FLAG)!=0) VDP_drawText("Si", 26, 20);
-            else VDP_drawText("No", 26, 20);
-        }
-        //Colision por DISTANCIA
-        if(seleccion_tipo_colision == 1)
-        {
-            VDP_drawText("En rango de colision?",  2, 20);
-            if( abs(bala_posx-bala2_posx)<TOLERANCIA && abs(bala_posy-bala2_posy)<TOLERANCIA)
-                VDP_drawText("Si", 26, 20);
-            else
-                VDP_drawText("No", 26, 20);
+        handleInputPart1();
+
+        u16 value = JOY_readJoypad( JOY_1 );
+        if ( value & BUTTON_START ) { break; }
+
+        if ( collisionType == 0 ) {
+            VDP_drawText( "HW collision bit active?     ", 2, 20 );
+            if ( GET_VDP_STATUS( VDP_SPRCOLLISION_FLAG ) != 0 ) {
+                VDP_drawText( "Yes", 26, 20 );
+            } else {
+                VDP_drawText( "No ", 26, 20 );
+            }
         }
 
-        //muestra las coordenadas de los sprites
-        muestra_posiciones();
+        if ( collisionType == 1 ) {
+            VDP_drawText( "Within collision range?      ", 2, 20 );
+            if ( abs( bulletPosx - bullet2Posx ) < TOLERANCE &&
+                 abs( bulletPosy - bullet2Posy ) < TOLERANCE ) {
+                VDP_drawText( "Yes", 26, 20 );
+            } else {
+                VDP_drawText( "No ", 26, 20 );
+            }
+        }
 
-        //actualiza el VDP
+        drawPositions();
+
         SPR_update();
-
-        //sincroniza la Megadrive con la TV
         VDP_waitVSync();
+
     }
 
 
-    /****************** PARTE 2: CAJAS DE COLISION ******************/
+    /****************** PART 2: BOUNDING BOX COLLISION ******************/
 
-    //desactiva cualquier interrupcion (colision HW)
-    SYS_setHIntCallback(NULL);
-    VDP_setHIntCounter(NULL);
-    VDP_setHInterrupt(NULL);
-    //se carga los sprites anteriores
+    SYS_setHIntCallback( NULL );
+    VDP_setHIntCounter( NULL );
+    VDP_setHInterrupt( NULL );
+
     SPR_reset();
     SPR_init();
 
-    //borro textos anteriores
-    VDP_clearTextAreaBG(BG_A,0,20,40,28);
+    VDP_clearTextAreaBG( BG_A, 0, 20, 40, 28 );
 
-    //carga los recursos necesarios para esta parte
+    bulletPosx = 100;
+    bulletPosy = 100;
+    bulletSprite = SPR_addSprite( &bala_sprite, bulletPosx, bulletPosy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
-    //añade el sprite de la bala
-    bala_posx = 100;
-    bala_posy = 100;
-    mi_bala   = SPR_addSprite(&bala_sprite, bala_posx,  bala_posy,  TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
+    PAL_setPalette( PAL2, sonic_sprite.palette->data, CPU );
 
+    sonicSprite = SPR_addSprite( &sonic_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL2, TRUE, FALSE, FALSE ) );
+    SPR_setAnimAndFrame( sonicSprite, 0, SONIC_IDLE2 );
 
-    //recoge la paleta de sonic y la mete en la 3a paleta del sistema
-    PAL_setPalette(PAL2,sonic_sprite.palette->data, CPU);
+    collisionType = 1;
 
-    //carga el sprite de Sonic
-    mi_sonic = SPR_addSprite(&sonic_sprite, sonic_posx, sonic_posy, TILE_ATTR(PAL2, TRUE, FALSE, FALSE));
-    SPR_setAnimAndFrame(mi_sonic, 0, SONIC_IDLE2);
+    VDP_drawText( "BOUNDING BOX COLLISION           ", 2, 3  );
+    VDP_drawText( "A - Origin-point collision       ", 2, 4  );
+    VDP_drawText( "B - Bounding box collision       ", 2, 5  );
+    VDP_drawText( "Press - C - to continue          ", 2, 26 );
 
-    //1: colision puntos de origen, 2: colision con caja de colisiones
-    seleccion_tipo_colision = 1;
+    while ( TRUE ) {
 
-    //AYUDA en pantalla
-    VDP_drawText("COLISION simple                ",  2, 3);
-    VDP_drawText("A - Colisiones: Punto Origen   ",  2, 4);
-    VDP_drawText("B - Colisiones: Caja colisiones",  2, 5);
-    VDP_drawText("Pulsa - C - para continuar  ",  2, 26);
+        handleInputPart2();
 
-    //Bucle principal segunda parte
-    while(TRUE)
-    {
-        //recoge la entrada de los mandos
-        handleInput_parte2();
-            //si pulsamos C salimos del bucle y vamos a la parte3
-            u16 value = JOY_readJoypad(JOY_1);
-            if (value & BUTTON_C) break;
+        u16 value = JOY_readJoypad( JOY_1 );
+        if ( value & BUTTON_C ) { break; }
 
-        //Chequeo de colisiones
-        if(seleccion_tipo_colision == 1) chequea_colision1();
-        if(seleccion_tipo_colision == 2) chequea_colision2();
+        if ( collisionType == 1 ) { checkCollision1(); }
+        if ( collisionType == 2 ) { checkCollision2(); }
 
-        //actualiza el VDP
         SPR_update();
-
-        //sincroniza la Megadrive con la TV
         VDP_waitVSync();
+
     }
 
 
-    /****************** PARTE 3: MULTI COLISION  ******************/
-    //se carga los sprites anteriores
+    /****************** PART 3: MULTI-SPRITE COLLISION ******************/
+
     SPR_reset();
     SPR_init();
 
-    //borro textos anteriores
-    VDP_clearTextAreaBG(BG_A,0,20,40,28);
+    VDP_clearTextAreaBG( BG_A, 0, 20, 40, 28 );
 
-    //carga los recursos necesarios para esta parte
-    int cont;
-    for(cont = 0; cont < MAX_BALAS; cont++)
-    {
-        MuchasBalas_posx[cont] = random() % 320;   // random() : Return a random u16 integer (0..65535).
-        MuchasBalas_posy[cont] = random() % 224;   // % operador modulo :  devuelve el resto de una division (siempre un ENTERO)
-                                            // en este caso devuelve de 0 a la cantidad indicada
-        mi_MuchasBalas[cont]  = SPR_addSprite(&bala_sprite,   MuchasBalas_posx[cont],  MuchasBalas_posy[cont], TILE_ATTR(PAL2, TRUE, FALSE, FALSE));
+    for ( int i = 0; i < MAX_BULLETS; i++ ) {
+        bulletsPosx[i] = random() % 320;
+        bulletsPosy[i] = random() % 224;
+        bullets[i] = SPR_addSprite( &bala_sprite, bulletsPosx[i], bulletsPosy[i], TILE_ATTR( PAL2, TRUE, FALSE, FALSE ) );
     }
 
-    //sprite sonic
-    sonic_posx = 100;
-    sonic_posy = 100;
-    mi_sonic = SPR_addSprite(&sonic_sprite, sonic_posx, sonic_posy, TILE_ATTR(PAL2, TRUE, FALSE, FALSE));
-    SPR_setAnimAndFrame(mi_sonic, 0, SONIC_IDLE2);
+    sonicPosx = 100;
+    sonicPosy = 100;
+    sonicSprite = SPR_addSprite( &sonic_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL2, TRUE, FALSE, FALSE ) );
+    SPR_setAnimAndFrame( sonicSprite, 0, SONIC_IDLE2 );
 
-    //AYUDA en pantalla
-    VDP_drawText("MULTI COLISIONES                     ",  2, 3);
-    VDP_drawText("A - Colisiones: bucle Punto Origen   ",  2, 4);
-    VDP_drawText("B - Colisiones: bucle Caja colisiones",  2, 5);
+    VDP_drawText( "MULTI-SPRITE COLLISION           ", 2, 3 );
+    VDP_drawText( "A - Loop: origin-point collision ", 2, 4 );
+    VDP_drawText( "B - Loop: bounding box collision ", 2, 5 );
 
-    //por defecto
-    seleccion_tipo_colision = 1;
+    collisionType = 1;
 
-    //Bucle principal tercera parte
-    while(TRUE)
-    {
-        //recoje la entrada de los mandos
-        handleInput_parte3();
+    while ( TRUE ) {
 
-        //Chequeo de colisiones
-        if(seleccion_tipo_colision == 1) chequea_colision3();
-        if(seleccion_tipo_colision == 2) chequea_colision4();
+        handleInputPart3();
 
-        //actualiza el VDP
+        if ( collisionType == 1 ) { checkCollision3(); }
+        if ( collisionType == 2 ) { checkCollision4(); }
+
         SPR_update();
-
-        //sincroniza la Megadrive con la TV
         VDP_waitVSync();
+
     }
-
-
 
     return 0;
+
 }
 
 
+/********** PART 1 FUNCTIONS ****************************************/
 
+// reads the HW sprite-collision flag inside the H-blank interrupt
+// (the flag is only reliable when read from within the interrupt handler)
+void hblankCallback( void ) {
 
-
-
-
-
-
-
-
-
-/********** FUNCIONES DE LA PRIMERA PARTE ****************/
-
-void mi_hblank()
-{
-    //lee el bit del VDP y poco más, la cuestión es que hay que leerlo en la interrupcion
-    //si se intenta leer fuera de aqui, no dara resultado alguno
-    if(GET_VDP_STATUS(VDP_SPRCOLLISION_FLAG)!=0) VDP_drawText("Si", 26, 20);
-}
-
-//Funcion handleInput()  recoge la entrada del mando y actualiza la posicion de Sonic
-//ademas con A,B,C selecciona deteccion de colisiones
-static void handleInput()
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-        SPR_setPosition(mi_bala, bala_posx--, bala_posy);
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-        SPR_setPosition(mi_bala, bala_posx++, bala_posy);
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(mi_bala, bala_posx, bala_posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(mi_bala, bala_posx, bala_posy++);
-
-    //si pulsamos A
-    if (value & BUTTON_A){
-        seleccion_tipo_colision = 0;
-
-        SYS_setHIntCallback(mi_hblank);
-        VDP_setHIntCounter(8);		//cada 8 scanlines, se lanzará la interrupcion horizontal
-        VDP_setHInterrupt(1);		//Enable horizontal interrupt
-    }
-    //si pulsamos B
-    if (value & BUTTON_B){
-        seleccion_tipo_colision = 1;
-
-        //desactiva cualquier interrupcion (colision HW)
-        SYS_setHIntCallback(NULL);
-        VDP_setHIntCounter(NULL);
-        VDP_setHInterrupt(NULL);
+    if ( GET_VDP_STATUS( VDP_SPRCOLLISION_FLAG ) != 0 ) {
+        VDP_drawText( "Yes", 26, 20 );
     }
 
 }
 
-static void muestra_posiciones()
-{
-    //"%4d" justific a derechas, si no se pone al poner el contador a 0
-    //los numeros nuevos (1 caracter:0,1,2...) se machacan/mezclan con
-    //los viejos (que tienen hasta 3 caracteres:   999)
+static void handleInputPart1( void ) {
 
-    //posicion bala1
-    char x1_string[32];
-    sprintf(x1_string, "%4d", bala_posx);
-    VDP_drawText("bala X:",  2, 21);
-    VDP_drawText(x1_string, 14, 21);
-    char y1_string[32];
-    sprintf(y1_string, "%4d", bala_posy);
-    VDP_drawText("bala Y:",  2, 22);
-    VDP_drawText(y1_string, 14, 22);
+    u16 value = JOY_readJoypad( JOY_1 );
 
-    //posicion bala2
-    char x2_string[32];
-    sprintf(x2_string, "%4d", bala2_posx);
-    VDP_drawText("Bala2 X:",  2, 23);
-    VDP_drawText(x2_string,  14, 23);
-    char y2_string[32];
-    sprintf(y2_string, "%4d", bala2_posy);
-    VDP_drawText("Bala2 Y:",  2, 24);
-    VDP_drawText(y2_string,  14, 24);
+    if ( value & BUTTON_LEFT )  { SPR_setPosition( bulletSprite, bulletPosx--, bulletPosy ); }
+    if ( value & BUTTON_RIGHT ) { SPR_setPosition( bulletSprite, bulletPosx++, bulletPosy ); }
+    if ( value & BUTTON_UP )    { SPR_setPosition( bulletSprite, bulletPosx, bulletPosy-- ); }
+    if ( value & BUTTON_DOWN )  { SPR_setPosition( bulletSprite, bulletPosx, bulletPosy++ ); }
 
-}
-
-
-/********** FUNCIONES DE LA SEGUNDA PARTE ****************/
-
-//Recoge la entrada del mando y actualiza la posicion de Sonic
-//ademas con A,B,C selecciona deteccion de colisiones
-static void handleInput_parte2()
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-        SPR_setPosition(mi_sonic, sonic_posx--, sonic_posy);
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-        SPR_setPosition(mi_sonic, sonic_posx++, sonic_posy);
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(mi_sonic, sonic_posx, sonic_posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(mi_sonic, sonic_posx, sonic_posy++);
-
-    //si pulsamos B
-    if (value & BUTTON_A){
-        SPR_setAnimAndFrame(mi_sonic, 0, SONIC_IDLE2); seleccion_tipo_colision = 1;
-    }
-    //si pulsamos B
-    if (value & BUTTON_B){
-        SPR_setAnimAndFrame(mi_sonic, 0, SONIC_IDLE3); seleccion_tipo_colision = 2;
-    }
-}
-
-
-//CHEQUEA COLISION: A PARTIR DE PUNTOS DE ORIGEN
-static void chequea_colision1()
-{
-    //Comprobando colisiones
-    VDP_drawText("En rango de colision?",  2, 20);
-
-    if( abs(sonic_posx-bala_posx)<TOLERANCIA && abs(sonic_posy-bala_posy)<TOLERANCIA)
-        VDP_drawText("Si", 26, 20);
-    else
-        VDP_drawText("No", 26, 20);
-
-    KLog_U1("sonic_posx:", sonic_posx);
-    KLog_U1("bala_posx :", bala_posx);
-    KLog_U1("resta     :", abs(sonic_posx-bala_posx));
-    KLog_U1("  sonic_posy:", sonic_posy);
-    KLog_U1("  bala_posy :", bala_posy);
-    KLog_U1("  resta     :", abs(sonic_posy-bala_posy));
-
-
-    //"%4d" justific a derechas, si no se pone al poner el contador a 0
-    //los numeros nuevos (1 caracter:0,1,2...) se machacan/mezclan con
-    //los viejos (que tienen hasta 3 caracteres:   999)
-
-    //posicion Sonic
-    char x1_string[32];
-    sprintf(x1_string, "%4d", sonic_posx);
-    VDP_drawText("Sonic X:",  2, 21);
-    VDP_drawText(x1_string, 16, 21);
-    char y1_string[32];
-    sprintf(y1_string, "%4d", sonic_posy);
-    VDP_drawText("Sonic Y:",  2, 22);
-    VDP_drawText(y1_string, 16, 22);
-
-    //posicion bala
-    char x2_string[32];
-    sprintf(x2_string, "%4d", bala_posx);
-    VDP_drawText("Bala X:",  2, 23);
-    VDP_drawText(x2_string, 16, 23);
-    char y2_string[32];
-    sprintf(y2_string, "%4d", bala_posy);
-    VDP_drawText("Bala Y:",  2, 24);
-    VDP_drawText(y2_string, 16, 24);
-}
-
-//CHEQUEA COLISION: CON CAJA DE COLISION -> NO HAY TOLERANCIA
-static void chequea_colision2()
-{
-    //actualiza la caja de colision
-    CajaColision.x1 = sonic_posx + 16;
-    CajaColision.y1 = sonic_posy +  8;
-    CajaColision.x2 = sonic_posx + 31;
-    CajaColision.y2 = sonic_posy + 31;
-
-    //Comprobando colisiones
-    VDP_drawText("En rango de colision?",  2, 20);
-
-    if( bala_posx>=CajaColision.x1 && bala_posx<=CajaColision.x2 && bala_posy>=CajaColision.y1 && bala_posy<=CajaColision.y2 )
-    {
-
-        VDP_drawText("Si", 26, 20);
-
-    } else VDP_drawText("No", 26, 20);
-
-
-    //"%4d" justific a derechas, si no se pone al poner el contador a 0
-    //los numeros nuevos (1 caracter:0,1,2...) se machacan/mezclan con
-    //los viejos (que tienen hasta 3 caracteres:   999)
-
-    //posicion Sonic
-    char x1_string[32];
-    sprintf(x1_string, "%4d", sonic_posx);
-    VDP_drawText("Sonic X:",  2, 21);
-    VDP_drawText(x1_string, 16, 21);
-    char y1_string[32];
-    sprintf(y1_string, "%4d", sonic_posy);
-    VDP_drawText("Sonic Y:",  2, 22);
-    VDP_drawText(y1_string, 16, 22);
-}
-
-
-
-/********** FUNCIONES DE LA TERCERA PARTE ****************/
-
-//Funcion handleInput()  recoje la entrada del mando y actualiza la posicion de Sonic
-//ademas con A,B,C selecciona deteccion de colisiones
-static void handleInput_parte3()
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-        SPR_setPosition(mi_sonic, sonic_posx--, sonic_posy);
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-        SPR_setPosition(mi_sonic, sonic_posx++, sonic_posy);
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(mi_sonic, sonic_posx, sonic_posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(mi_sonic, sonic_posx, sonic_posy++);
-
-    //si pulsamos B
-    if (value & BUTTON_A){
-        SPR_setAnimAndFrame(mi_sonic, 0, SONIC_IDLE2); seleccion_tipo_colision = 1;
-    }
-    //si pulsamos C
-    if (value & BUTTON_B){
-        SPR_setAnimAndFrame(mi_sonic, 0, SONIC_IDLE3); seleccion_tipo_colision = 2;
-    }
-}
-
-//CHEQUEA COLISION: A PARTIR DE PUNTOS DE ORIGEN
-static void chequea_colision3()
-{
-    //contador
-    int cont, cont2;
-
-    //Comprobando colisiones
-    VDP_drawText("comprobando colisiones?",  2, 22);
-
-    for(cont = 0, cont2 = 0; cont < MAX_BALAS; cont++)
-    {
-        if( abs(sonic_posx-MuchasBalas_posx[cont])<TOLERANCIA &&
-            abs(sonic_posy-MuchasBalas_posy[cont])<TOLERANCIA)
-            cont2++;
+    if ( value & BUTTON_A ) {
+        collisionType = 0;
+        SYS_setHIntCallback( hblankCallback );
+        VDP_setHIntCounter( 8 );
+        VDP_setHInterrupt( 1 );
     }
 
-    if(cont2==0) VDP_drawText("No", 28, 22); else VDP_drawText("Si", 28, 22);
-/*
-    //posicion Sonic
-    //por algún motivo... si no comentamos esto de aquí abajo, va más lento de lo normal
-    //(pero NO en chequea_colision2() donde hacemos exactamente lo mismo  ?? )
-    char x1_string[32];
-    sprintf(x1_string, "%4d", sonic_posx);
-    VDP_drawText("Sonic X:",  2, 21);
-    VDP_drawText(x1_string, 16, 21);
-    char y1_string[32];
-    sprintf(y1_string, "%4d", sonic_posy);
-    VDP_drawText("Sonic Y:",  2, 22);
-    VDP_drawText(y1_string, 16, 22);*/
+    if ( value & BUTTON_B ) {
+        collisionType = 1;
+        SYS_setHIntCallback( NULL );
+        VDP_setHIntCounter( NULL );
+        VDP_setHInterrupt( NULL );
+    }
+
+}
+
+static void drawPositions( void ) {
+
+    char buf[32];
+
+    sprintf( buf, "%4d", bulletPosx );
+    VDP_drawText( "Bullet X:", 2, 21 );
+    VDP_drawText( buf, 14, 21 );
+
+    sprintf( buf, "%4d", bulletPosy );
+    VDP_drawText( "Bullet Y:", 2, 22 );
+    VDP_drawText( buf, 14, 22 );
+
+    sprintf( buf, "%4d", bullet2Posx );
+    VDP_drawText( "Bullet2 X:", 2, 23 );
+    VDP_drawText( buf, 14, 23 );
+
+    sprintf( buf, "%4d", bullet2Posy );
+    VDP_drawText( "Bullet2 Y:", 2, 24 );
+    VDP_drawText( buf, 14, 24 );
 
 }
 
 
+/********** PART 2 FUNCTIONS ****************************************/
 
-//CHEQUEA COLISION: CON CAJA DE COLISION -> NO HAY TOLERANCIA
-static void chequea_colision4()
-{
-    //para contar y para ver si hay, al menos, una colision
-    int cont, cont2;
+static void handleInputPart2( void ) {
 
-    //actualiza la caja de colision
-    CajaColision.x1 = sonic_posx + 16;
-    CajaColision.y1 = sonic_posy +  8;
-    CajaColision.x2 = sonic_posx + 31;
-    CajaColision.y2 = sonic_posy + 31;
+    u16 value = JOY_readJoypad( JOY_1 );
 
-    //Comprobando colisiones
-    VDP_drawText("comprobando colisiones?",  2, 22);
+    if ( value & BUTTON_LEFT )  { SPR_setPosition( sonicSprite, sonicPosx--, sonicPosy ); }
+    if ( value & BUTTON_RIGHT ) { SPR_setPosition( sonicSprite, sonicPosx++, sonicPosy ); }
+    if ( value & BUTTON_UP )    { SPR_setPosition( sonicSprite, sonicPosx, sonicPosy-- ); }
+    if ( value & BUTTON_DOWN )  { SPR_setPosition( sonicSprite, sonicPosx, sonicPosy++ ); }
 
-    for(cont = 0, cont2 = 0; cont < MAX_BALAS; cont++)
-    {
-        if( MuchasBalas_posx[cont]>=CajaColision.x1 && MuchasBalas_posx[cont]<=CajaColision.x2 &&
-            MuchasBalas_posy[cont]>=CajaColision.y1 && MuchasBalas_posy[cont]<=CajaColision.y2 )
-        {
-            cont2++;
+    if ( value & BUTTON_A ) {
+        SPR_setAnimAndFrame( sonicSprite, 0, SONIC_IDLE2 );
+        collisionType = 1;
+    }
+
+    if ( value & BUTTON_B ) {
+        SPR_setAnimAndFrame( sonicSprite, 0, SONIC_IDLE3 );
+        collisionType = 2;
+    }
+
+}
+
+// origin-point collision: checks whether bullet origin is within TOLERANCE of Sonic origin
+static void checkCollision1( void ) {
+
+    char buf[32];
+
+    VDP_drawText( "Within collision range?      ", 2, 20 );
+
+    if ( abs( sonicPosx - bulletPosx ) < TOLERANCE &&
+         abs( sonicPosy - bulletPosy ) < TOLERANCE ) {
+        VDP_drawText( "Yes", 26, 20 );
+    } else {
+        VDP_drawText( "No ", 26, 20 );
+    }
+
+    KLog_U1( "sonicPosx:", sonicPosx );
+    KLog_U1( "bulletPosx:", bulletPosx );
+    KLog_U1( "delta x:  ", abs( sonicPosx - bulletPosx ) );
+    KLog_U1( "sonicPosy:", sonicPosy );
+    KLog_U1( "bulletPosy:", bulletPosy );
+    KLog_U1( "delta y:  ", abs( sonicPosy - bulletPosy ) );
+
+    sprintf( buf, "%4d", sonicPosx );
+    VDP_drawText( "Sonic X:", 2, 21 );
+    VDP_drawText( buf, 16, 21 );
+
+    sprintf( buf, "%4d", sonicPosy );
+    VDP_drawText( "Sonic Y:", 2, 22 );
+    VDP_drawText( buf, 16, 22 );
+
+    sprintf( buf, "%4d", bulletPosx );
+    VDP_drawText( "Bullet X:", 2, 23 );
+    VDP_drawText( buf, 16, 23 );
+
+    sprintf( buf, "%4d", bulletPosy );
+    VDP_drawText( "Bullet Y:", 2, 24 );
+    VDP_drawText( buf, 16, 24 );
+
+}
+
+// bounding box collision: checks whether the bullet origin falls inside Sonic's hitbox
+static void checkCollision2( void ) {
+
+    char buf[32];
+
+    collisionBox.x1 = sonicPosx + 16;
+    collisionBox.y1 = sonicPosy +  8;
+    collisionBox.x2 = sonicPosx + 31;
+    collisionBox.y2 = sonicPosy + 31;
+
+    VDP_drawText( "Within collision range?      ", 2, 20 );
+
+    if ( bulletPosx >= collisionBox.x1 && bulletPosx <= collisionBox.x2 &&
+         bulletPosy >= collisionBox.y1 && bulletPosy <= collisionBox.y2 ) {
+        VDP_drawText( "Yes", 26, 20 );
+    } else {
+        VDP_drawText( "No ", 26, 20 );
+    }
+
+    sprintf( buf, "%4d", sonicPosx );
+    VDP_drawText( "Sonic X:", 2, 21 );
+    VDP_drawText( buf, 16, 21 );
+
+    sprintf( buf, "%4d", sonicPosy );
+    VDP_drawText( "Sonic Y:", 2, 22 );
+    VDP_drawText( buf, 16, 22 );
+
+}
+
+
+/********** PART 3 FUNCTIONS ****************************************/
+
+static void handleInputPart3( void ) {
+
+    u16 value = JOY_readJoypad( JOY_1 );
+
+    if ( value & BUTTON_LEFT )  { SPR_setPosition( sonicSprite, sonicPosx--, sonicPosy ); }
+    if ( value & BUTTON_RIGHT ) { SPR_setPosition( sonicSprite, sonicPosx++, sonicPosy ); }
+    if ( value & BUTTON_UP )    { SPR_setPosition( sonicSprite, sonicPosx, sonicPosy-- ); }
+    if ( value & BUTTON_DOWN )  { SPR_setPosition( sonicSprite, sonicPosx, sonicPosy++ ); }
+
+    if ( value & BUTTON_A ) {
+        SPR_setAnimAndFrame( sonicSprite, 0, SONIC_IDLE2 );
+        collisionType = 1;
+    }
+
+    if ( value & BUTTON_B ) {
+        SPR_setAnimAndFrame( sonicSprite, 0, SONIC_IDLE3 );
+        collisionType = 2;
+    }
+
+}
+
+// origin-point multi-collision: counts how many bullets are within TOLERANCE of Sonic
+static void checkCollision3( void ) {
+
+    int hitCount = 0;
+
+    VDP_drawText( "Collision detected?          ", 2, 22 );
+
+    for ( int i = 0; i < MAX_BULLETS; i++ ) {
+        if ( abs( sonicPosx - bulletsPosx[i] ) < TOLERANCE &&
+             abs( sonicPosy - bulletsPosy[i] ) < TOLERANCE ) {
+            hitCount++;
         }
     }
 
-    if(cont2==1) VDP_drawText("Si", 28, 22); else VDP_drawText("No", 28, 22);
+    if ( hitCount == 0 ) {
+        VDP_drawText( "No ", 28, 22 );
+    } else {
+        VDP_drawText( "Yes", 28, 22 );
+    }
+
+}
+
+// bounding box multi-collision: counts how many bullets fall inside Sonic's hitbox
+static void checkCollision4( void ) {
+
+    int hitCount = 0;
+
+    collisionBox.x1 = sonicPosx + 16;
+    collisionBox.y1 = sonicPosy +  8;
+    collisionBox.x2 = sonicPosx + 31;
+    collisionBox.y2 = sonicPosy + 31;
+
+    VDP_drawText( "Collision detected?          ", 2, 22 );
+
+    for ( int i = 0; i < MAX_BULLETS; i++ ) {
+        if ( bulletsPosx[i] >= collisionBox.x1 && bulletsPosx[i] <= collisionBox.x2 &&
+             bulletsPosy[i] >= collisionBox.y1 && bulletsPosy[i] <= collisionBox.y2 ) {
+            hitCount++;
+        }
+    }
+
+    if ( hitCount == 1 ) {
+        VDP_drawText( "Yes", 28, 22 );
+    } else {
+        VDP_drawText( "No ", 28, 22 );
+    }
 
 }

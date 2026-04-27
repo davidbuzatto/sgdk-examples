@@ -1,17 +1,20 @@
 /**
- *      @Title:  "Leccion 11 - Escenarios interactivos"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 11 - "Interactive Scenarios" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
-
 /*
-    EJEMPLO 0: Tintado usando paleta de rojos (PAL3)
-    EJEMPLO 1: Tintado LENTO usando paleta de rojos (PAL3)
-    EJEMPLO 2: Tintado usando solo 1 color (color 9 de la paleta 0)
-    EJEMPLO 3: Tintado usando una paleta usando (PAL1)
-    EJEMPLO 4: Borrado completo de un plano
-    EJEMPLO 5: Borrado parcial de un plano
-    EJEMPLO 6: Torres destructibles: Cambio de tiles
+    EXAMPLE 0: palette tint using red palette (PAL3)
+    EXAMPLE 1: slow palette tint using red palette (PAL3)
+    EXAMPLE 2: single-color tint (color index 9 of PAL0)
+    EXAMPLE 3: tint using an existing palette (PAL1)
+    EXAMPLE 4: full plane A clear
+    EXAMPLE 5: partial plane A clear
+    EXAMPLE 6: destructible towers — tile repaint
 */
 
 #include <genesis.h>
@@ -19,578 +22,511 @@
 #include "fondos.h"
 #include <sys.h>
 
-#define FUERA_PANTALLA      -100    //para colocar cosas fuera de la zona visible de la TV
-#define MAX_TORRES          2       //num de torres
-#define T_TINTE             2       //tiempo durante el cual sprite/escenario se pone rojo al recibir colision
-#define T_TINTE_LENTO       9       //tiempo durante el cual sprite/escenario se pone rojo al recibir colision
-#define POS_MIRA            8       //Posici�n disparo respecto a la mira
+#define OFF_SCREEN        -100  // position used to hide sprites outside the visible area
+#define MAX_TOWERS          2
+#define TINT_DURATION       2   // cycles the tower stays red after a hit
+#define TINT_DURATION_SLOW  9   // longer tint duration (example 1)
+#define AIM_OFFSET          8   // shot spawn offset relative to the aim crosshair
 
-//declaracion de funciones
+// function declarations
+void joyEvent( u16 joy, u16 changed, u16 state );
 
-    void joyEvent(u16 joy, u16 changed, u16 state);
+void createLevel( void );
+void createScenery( void );
+void updateScenery( void );
+void createAim( void );
+void updateAim( void );
 
-    void crea_nivel();
-    void crea_decorado();
-    void maneja_decorado();
-    void crea_mira();
-    void maneja_mira();
+void createPlayerShot( void );
+void firePlayerShot( void );
+void updatePlayerShot( void );
 
-    void crea_bala_player();
-    void trata_bala_player();
-    void maneja_bala_player();
+void detectCollision( void );
 
-    void detecta_colision();
+void drawMessages( void );
+void drawHealth( void );
 
-    void muestraMENSAJES();
-    void pinta_vida();
+// demo state
+int locked  = 1; // inner loop lock; set to 0 to advance to the next example
+int example = 0;
 
+// aim crosshair
+struct {
+    s16     x, y;
+    s16     movx, movy;
+    Sprite *sprite;
+} aim;
 
-//declaracion de variables
-int cerrojo = 1;  //para ir viendo los distintos ejemplos
-int ejemplo = 0;  //ejemplo mostrado
+// player shot
+struct {
+    Sprite *sprite;
+    s16     x, y;
+    int     active; // 0=inactive; 1–4=active, corresponds to the 4 shot animation frames
+} playerShot;
 
-    struct {
-        s16 x,y ;           //posicion
-        s16 movx;           //Velocidad mov eje x
-        s16 movy;           //Velocidad mov eje y
-        Sprite *spr_mira;   //grafico de la mira
-    }Mira;
+// tower
+struct {
+    int health;
+    int state;        // 0=intact, 1=half-destroyed, 2=ruins
+    s16 colX1, colY1; // hitbox top-left
+    s16 colX2, colY2; // hitbox bottom-right
+    s16 hitActive;
+    s16 hitTimer;
+} tower[MAX_TOWERS];
 
-    struct{
-        Sprite* spr_bala;
-        s16 x,y;            //posicion
-        int esta_activo;    //0=bala "muerta"="sin uso" / del 1 al 4 activo y corresponde a los 4 frames del disparo
-    }DisparoPlayer;
+TileMap *towerMap;
 
-    struct {
-        int vida;           //puntos vida
-        int estado;         //estado (0=inicial, 1=semidestruida, 2= cimientos)
-        s16 colX1,colY1;    //caja colision torre (punto sup izq)
-        s16 colX2,colY2;    //caja colision torre (punto inf dch)
-        s16 activa_impacto; //para mostrar impactos
-        s16 t_impacto;      //para mostrar impactos
-    }Torre[2];
-
-    TileMap *Estructuras;        // para el MAP de las Torres
-
-	u16 id_tile_inicial;    // siempre ser� 1 (el tile 0 se lo reserva el SGDK)
-	u16 id_tile_final_planB;// apunta al primer tile libre DESPUES de cargar en mem VDP los tiles del plan B
-	u16 id_tile_final_planA;// apunta al primer tile libre DESPUES de cargar en mem VDP los tiles del plan A
-
-
+u16 tileStart;       // always 1 (tile 0 is reserved by SGDK)
+u16 tileFinalBgB;    // first free VRAM slot after BG_B tiles
+u16 tileFinalBgA;    // first free VRAM slot after BG_A tiles
 
 
-int main() {
+int main( bool hard ) {
 
-    //320x224
     VDP_setScreenWidth320();
     VDP_setScreenHeight224();
-    //Recoge la paleta del fondo y de las torres
-    PAL_setPalette(PAL0, fondo01_01.palette->data, CPU);
-    //Recoge la paleta de la mira, de los disparos y del texto
-    PAL_setPalette(PAL1,sprite_mira.palette->data, CPU);
-    //Paleta 3 a ROJOS, para el ejemplo correspondiente.
-    //    ( la PAL2 no la inicializo ni uso, el SGDK la pondr� de forma autom�tica a verdes )
-    PAL_setPalette(PAL3, palette_red, CPU);
-    //Inicia el motor de sprites
+
+    PAL_setPalette( PAL0, fondo01_01.palette->data, CPU );
+    PAL_setPalette( PAL1, sprite_mira.palette->data, CPU );
+    // PAL2 is left at the SGDK default (greens)
+    PAL_setPalette( PAL3, palette_red, CPU );
+
     SPR_init();
-    //creacion de elementos
-    crea_nivel();         //crea el nivel
-    crea_bala_player();   //crea el disparo (antes que la mira para salir por delante)
-    crea_mira();          //crea la  mira
-    //deteccion asincrona de pulsaciones (para cambiar de ejemplo)
-    JOY_setEventHandler(joyEvent);
 
-    //BUCLE PRINCIPAL
-	while (TRUE)
-    {
-        crea_decorado();      //re-crea el decorado, las torres (se hace al final para salir por detras)
-        muestraMENSAJES();    //ayuda en pantalla
+    createLevel();
+    createPlayerShot(); // created before the aim so it renders behind it
+    createAim();
 
-        //BUCLE SECUNDARIO (una vez por ejemplo)
-        while(cerrojo)
-        {
-            maneja_decorado();
-            maneja_mira();
-            trata_bala_player();
-            pinta_vida();
-            //actualiza VDP
+    JOY_setEventHandler( joyEvent );
+
+    while ( TRUE ) {
+
+        createScenery();
+        drawMessages();
+
+        while ( locked ) {
+
+            updateScenery();
+            updateAim();
+            updatePlayerShot();
+            drawHealth();
+
             SPR_update();
-            //Espera al barrido vertical TV
             SYS_doVBlankProcess();
+
         }
 
-        ejemplo++;
+        example++;
+
     }
 
-return 1;
+    return 0;
+
 }
 
 
+void createLevel( void ) {
 
-
-
-
-
-//CREA LOS FONDOS INICIALES
-void crea_nivel(){
-
-    //Desactiva las interrupciones
     SYS_disableInts();
 
-    //Borra los ambos planos
-    VDP_clearPlane(BG_A, TRUE);
-    VDP_clearPlane(BG_B, TRUE);
+    VDP_clearPlane( BG_A, TRUE );
+    VDP_clearPlane( BG_B, TRUE );
 
-    //FONDOS
-    id_tile_inicial = 1;
-    //PLANO B: fondo castillo
-    VDP_drawImageEx(BG_B, &fondo01_01,  TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_inicial), 0, 0, FALSE, TRUE);
-    id_tile_final_planB += fondo01_01.tileset->numTile;
+    tileStart = 1;
 
-    //PLANO A: Las 2 torres
-    Estructuras = unpackTileMap(fondo01_01_torres.tilemap, NULL);
-    VDP_loadTileSet(fondo01_01_torres.tileset, id_tile_final_planB, CPU); //id_tile_final_planB->porque los tiles de las torres se guardan a continuacion
-    VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
-    VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), 31, 4, 0, 0, 10, 11);
-    id_tile_final_planA += fondo01_01.tileset->numTile;                  //id_tile_final_planA->indicara primera posicion libre mem VDP despues de cargar los tiles de las torres
+    VDP_drawImageEx( BG_B, &fondo01_01, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileStart ), 0, 0, FALSE, TRUE );
+    tileFinalBgB += fondo01_01.tileset->numTile;
 
-    //Activa las interrupciones
+    towerMap = unpackTileMap( fondo01_01_torres.tilemap, NULL );
+    VDP_loadTileSet( fondo01_01_torres.tileset, tileFinalBgB, CPU );
+    VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
+    VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), 31, 4, 0, 0, 10, 11 );
+    tileFinalBgA += fondo01_01.tileset->numTile;
+
     SYS_enableInts();
 
 }
 
-//CREA LA MIRA Y LA SITUA DENTRO DE LA PANTALLA VISIBLE
-void crea_mira() {
 
-    //valores iniciales
-    Mira.x = 100;
-    Mira.y = 100;
-    Mira.movx = 2;
-    Mira.movy = 2;
+void createAim( void ) {
 
-    //crea el sprite en el VDP
-    Mira.spr_mira = SPR_addSprite(&sprite_mira, Mira.x, Mira.y, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
-}
+    aim.x    = 100;
+    aim.y    = 100;
+    aim.movx = 2;
+    aim.movy = 2;
 
-
-void maneja_mira(){
-
-    u16 value = JOY_readJoypad(JOY_1);
-
-    //si pulsamos izquierda...
-    if(value & BUTTON_LEFT)
-    {
-        SPR_setPosition(Mira.spr_mira, Mira.x-=Mira.movx, Mira.y);
-        Mira.x -= Mira.movx;
-    }
-    //si pulsamos derecha...
-    if(value & BUTTON_RIGHT)
-    {
-        SPR_setPosition(Mira.spr_mira, Mira.x+=Mira.movx, Mira.y);
-        Mira.x += Mira.movx;
-    }
-    //si pulsamos arriba...
-    if(value & BUTTON_UP)
-    {
-        SPR_setPosition(Mira.spr_mira, Mira.x, Mira.y-=Mira.movy);
-        Mira.y -= Mira.movy;
-    }
-    //si pulsamos abajo...
-    if(value & BUTTON_DOWN)
-    {
-        SPR_setPosition(Mira.spr_mira, Mira.x, Mira.y+=Mira.movy);
-        Mira.y += Mira.movy;
-    }
-    //'A' disparar
-    if (value & BUTTON_A) maneja_bala_player();
-}
-
-//Deteccion para cambiar de ejemplo
-void joyEvent(u16 joy, u16 changed, u16 state)
-{
-    if (state & (BUTTON_B))
-    {
-    //hemos pulsado el bot�n B (y no lo hemos soltado)
-    }
-    else if (changed & BUTTON_B) //hemos soltado el bot�n B
-            {
-               cerrojo=0;
-            }
+    aim.sprite = SPR_addSprite( &sprite_mira, aim.x, aim.y, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
 }
 
 
+void updateAim( void ) {
 
+    u16 value = JOY_readJoypad( JOY_1 );
 
-void crea_decorado()
-{
-        //Torre: inicializa vida
-        Torre[0].vida  = 80;
-        Torre[0].estado= 0;
-        Torre[0].colX1 =   5;
-        Torre[0].colY1 =  40;
-        Torre[0].colX2 =  60;
-        Torre[0].colY2 = 110;
-        Torre[0].activa_impacto = 0;
-        Torre[0].t_impacto = 0;
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( aim.sprite, aim.x -= aim.movx, aim.y );
+        aim.x -= aim.movx;
+    }
 
-        Torre[1].vida  = 80;
-        Torre[1].estado = 0;
-        Torre[1].colX1 = 255;
-        Torre[1].colY1 =  40;
-        Torre[1].colX2 = 320;
-        Torre[1].colY2 = 110;
-        Torre[1].t_impacto = 0;
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( aim.sprite, aim.x += aim.movx, aim.y );
+        aim.x += aim.movx;
+    }
 
-        cerrojo = 1; //para no salirnos del bucle
+    if ( value & BUTTON_UP ) {
+        SPR_setPosition( aim.sprite, aim.x, aim.y -= aim.movy );
+        aim.y -= aim.movy;
+    }
+
+    if ( value & BUTTON_DOWN ) {
+        SPR_setPosition( aim.sprite, aim.x, aim.y += aim.movy );
+        aim.y += aim.movy;
+    }
+
+    if ( value & BUTTON_A ) { firePlayerShot(); }
+
 }
 
 
-void maneja_decorado()
-{
-    //EJEMPLO 0: TINTADO CON PALETA DE ROJOS
-    if(ejemplo==0)
-    {
-        if(Torre[0].activa_impacto!=0)
-        {
-            Torre[0].t_impacto++;
+// async button-release detection used to advance between examples
+void joyEvent( u16 joy, u16 changed, u16 state ) {
 
-            if(Torre[0].t_impacto==1) //tinte rojo
-            {
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL3, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+    if ( state & BUTTON_B ) {
+        // button B held — wait for release
+    } else if ( changed & BUTTON_B ) {
+        locked = 0;
+    }
 
-            }else
-            if(Torre[0].t_impacto>=T_TINTE) //tinte normal
-            {
-                Torre[0].activa_impacto = 0;
-                Torre[0].t_impacto = 0;
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+}
+
+
+void createScenery( void ) {
+
+    tower[0].health    = 80;
+    tower[0].state     = 0;
+    tower[0].colX1     =   5;
+    tower[0].colY1     =  40;
+    tower[0].colX2     =  60;
+    tower[0].colY2     = 110;
+    tower[0].hitActive = 0;
+    tower[0].hitTimer  = 0;
+
+    tower[1].health   = 80;
+    tower[1].state    = 0;
+    tower[1].colX1    = 255;
+    tower[1].colY1    =  40;
+    tower[1].colX2    = 320;
+    tower[1].colY2    = 110;
+    tower[1].hitTimer = 0;
+
+    locked = 1;
+
+}
+
+
+void updateScenery( void ) {
+
+    // EXAMPLE 0: red palette tint
+    if ( example == 0 ) {
+
+        if ( tower[0].hitActive != 0 ) {
+
+            tower[0].hitTimer++;
+
+            if ( tower[0].hitTimer == 1 ) {
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL3, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
+            } else if ( tower[0].hitTimer >= TINT_DURATION ) {
+                tower[0].hitActive = 0;
+                tower[0].hitTimer  = 0;
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
             }
+
         }
+
     }
 
+    // EXAMPLE 1: slow red palette tint
+    if ( example == 1 ) {
 
-    //EJEMPLO 1: TINTADO LENTO CON PALETA DE ROJOS (QUE SE NOTE LA INFLUENCIA DE T_TINTE_LENTO)
-    if(ejemplo==1)
-    {
-        if(Torre[0].activa_impacto!=0)
-        {
-            Torre[0].t_impacto++;
+        if ( tower[0].hitActive != 0 ) {
 
-            if(Torre[0].t_impacto==1) //tinte rojo
-            {
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL3, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+            tower[0].hitTimer++;
 
-            }else
-            if(Torre[0].t_impacto>=T_TINTE_LENTO) //tinte LENTO, mas tiempo hasta volver al estado normal
-            {
-                Torre[0].activa_impacto = 0;
-                Torre[0].t_impacto = 0;
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+            if ( tower[0].hitTimer == 1 ) {
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL3, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
+            } else if ( tower[0].hitTimer >= TINT_DURATION_SLOW ) {
+                tower[0].hitActive = 0;
+                tower[0].hitTimer  = 0;
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
             }
+
         }
+
     }
 
+    // EXAMPLE 2: single-color tint (color index 9 of PAL0)
+    if ( example == 2 ) {
 
-    //EJEMPLO 2: CAMBIANDO 1 SOLO COLOR
-    if(ejemplo==2)
-    {
-        if(Torre[0].activa_impacto!=0)
-        {
-            Torre[0].t_impacto++;
+        if ( tower[0].hitActive != 0 ) {
 
-            if(Torre[0].t_impacto==1) //tinte rojo
-            {
-                PAL_setColor(9,RGB24_TO_VDPCOLOR(0xff0000));  //(0x0098e5));
+            tower[0].hitTimer++;
 
-            }else
-            if(Torre[0].t_impacto>=T_TINTE) //tinte normal
-            {
-                PAL_setColor(9,RGB24_TO_VDPCOLOR(0x4c260c));
-                Torre[0].activa_impacto = 0;
-                Torre[0].t_impacto = 0;
+            if ( tower[0].hitTimer == 1 ) {
+                PAL_setColor( 9, RGB24_TO_VDPCOLOR( 0xff0000 ) );
+            } else if ( tower[0].hitTimer >= TINT_DURATION ) {
+                PAL_setColor( 9, RGB24_TO_VDPCOLOR( 0x4c260c ) );
+                tower[0].hitActive = 0;
+                tower[0].hitTimer  = 0;
             }
+
         }
+
     }
 
+    // EXAMPLE 3: tint using an existing palette (PAL1)
+    if ( example == 3 ) {
 
-    //EJEMPLO 3: TINTADO USANDO UNA PALETA YA EXISTENTE
-    if(ejemplo==3)
-    {
-        if(Torre[0].activa_impacto!=0)
-        {
-            Torre[0].t_impacto++;
+        if ( tower[0].hitActive != 0 ) {
 
-            if(Torre[0].t_impacto==1)
-            {
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL1, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+            tower[0].hitTimer++;
 
-            }else
-            if(Torre[0].t_impacto>=T_TINTE)
-            {
-                Torre[0].activa_impacto = 0;
-                Torre[0].t_impacto = 0;
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+            if ( tower[0].hitTimer == 1 ) {
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
+            } else if ( tower[0].hitTimer >= TINT_DURATION ) {
+                tower[0].hitActive = 0;
+                tower[0].hitTimer  = 0;
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
             }
+
         }
+
     }
 
+    // EXAMPLE 4: full plane A clear
+    if ( example == 4 ) {
 
-    //EJEMPLO 4:  BORRADO DEL PLANO COMPLETO
-    if(ejemplo==4)
-    {
-        if(Torre[0].activa_impacto!=0)
-        {
-            //aqui se hace rapido
+        if ( tower[0].hitActive != 0 ) {
 
-            Torre[0].t_impacto++;
+            tower[0].hitTimer++;
 
-            if(Torre[0].t_impacto==1)
-            {
-                //Borra plano A entero
-                VDP_clearPlane(BG_A, TRUE);
-                //Pinta la torre de la derecha
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), 31, 4, 0, 0, 10, 11);
-                //vuelvo a escribir los mensajes en pantalla, se borran con VDP_clearPlane()
-                muestraMENSAJES();
-            }else
-            if(Torre[0].t_impacto>=T_TINTE)
-            {
-                Torre[0].activa_impacto = 0;
-                Torre[0].t_impacto = 0;
-                //repinta la torre de la izquierda
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 0, 0, 10, 11);
+            if ( tower[0].hitTimer == 1 ) {
+                VDP_clearPlane( BG_A, TRUE );
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), 31, 4, 0, 0, 10, 11 );
+                drawMessages();
+            } else if ( tower[0].hitTimer >= TINT_DURATION ) {
+                tower[0].hitActive = 0;
+                tower[0].hitTimer  = 0;
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
             }
+
         }
+
     }
 
+    // EXAMPLE 5: partial plane A clear (only the left tower above the wall)
+    if ( example == 5 ) {
 
-    //EJEMPLO 5:  BORRADO PARCIAL
-    //Se borra la parte del plano A de la torre de la izquierda que queda por ENCIMA
-    //de la muralla. Es m�s r�pida que la forma anterior y solo borra lo que nos interesa.
-    if(ejemplo==5)
-    {
-        if(Torre[0].activa_impacto!=0)
-        {
-            //aqui se hace rapido
+        if ( tower[0].hitActive != 0 ) {
 
-            Torre[0].t_impacto++;
+            tower[0].hitTimer++;
 
-            if(Torre[0].t_impacto==1)
-            {
-                //aqui lento
-                VDP_clearTileMapRect(BG_A,0,3,10,5);  //borra parte del plano
-            }else
-            if(Torre[0].t_impacto>=T_TINTE)
-            {
-                Torre[0].activa_impacto = 0;
-                Torre[0].t_impacto = 0;
-                //repinta SOLO la parte del plano que borre antes
-                VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB),-1, 3, 0, 0, 10, 5);
+            if ( tower[0].hitTimer == 1 ) {
+                VDP_clearTileMapRect( BG_A, 0, 3, 10, 5 );
+            } else if ( tower[0].hitTimer >= TINT_DURATION ) {
+                tower[0].hitActive = 0;
+                tower[0].hitTimer  = 0;
+                VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 5 );
             }
+
         }
+
     }
 
+    // EXAMPLE 6: destructible towers with tile repaint
+    if ( example == 6 ) {
 
-    //EJEMPLO 6: TORRES DESTRUCTIBLES
-    if(ejemplo==6)
-    {
-        if(Torre[0].vida<40 && Torre[0].estado == 0){
-            Torre[0].estado = 1;
-            Estructuras = unpackTileMap(fondo01_01_torres.tilemap, NULL);
-            VDP_loadTileSet(fondo01_01_torres.tileset, id_tile_final_planB, CPU);
-            VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 10, 0, 10, 11);
-            id_tile_final_planA += fondo01_01.tileset->numTile;
-        }
-        if(Torre[0].vida<20 && Torre[0].estado == 1) {
-            Torre[0].estado = 2;
-            VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), -1, 3, 20, 0, 10, 11);
-            id_tile_final_planA += fondo01_01.tileset->numTile;
+        if ( tower[0].health < 40 && tower[0].state == 0 ) {
+            tower[0].state = 1;
+            towerMap = unpackTileMap( fondo01_01_torres.tilemap, NULL );
+            VDP_loadTileSet( fondo01_01_torres.tileset, tileFinalBgB, CPU );
+            VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 10, 0, 10, 11 );
+            tileFinalBgA += fondo01_01.tileset->numTile;
         }
 
-        //Torre dcha
-        if(Torre[1].vida<40 && Torre[1].estado == 0){
-            Torre[1].estado = 1;
-            Estructuras = unpackTileMap(fondo01_01_torres.tilemap, NULL);
-            VDP_loadTileSet(fondo01_01_torres.tileset, id_tile_final_planB, CPU);
-            VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), 31, 4, 10, 0, 10, 11);
-            id_tile_final_planA += fondo01_01.tileset->numTile;
+        if ( tower[0].health < 20 && tower[0].state == 1 ) {
+            tower[0].state = 2;
+            VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 20, 0, 10, 11 );
+            tileFinalBgA += fondo01_01.tileset->numTile;
         }
-        if(Torre[1].vida<20 && Torre[1].estado == 1) {
-            Torre[1].estado = 2;
-            VDP_setMapEx(BG_A, Estructuras, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, id_tile_final_planB), 31, 4, 20, 0, 10, 11);
+
+        if ( tower[1].health < 40 && tower[1].state == 0 ) {
+            tower[1].state = 1;
+            towerMap = unpackTileMap( fondo01_01_torres.tilemap, NULL );
+            VDP_loadTileSet( fondo01_01_torres.tileset, tileFinalBgB, CPU );
+            VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), 31, 4, 10, 0, 10, 11 );
+            tileFinalBgA += fondo01_01.tileset->numTile;
         }
+
+        if ( tower[1].health < 20 && tower[1].state == 1 ) {
+            tower[1].state = 2;
+            VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), 31, 4, 20, 0, 10, 11 );
+        }
+
     }
 
-    //REINICIO
-    if(ejemplo==7){
+    // RESET
+    if ( example == 7 ) {
         SYS_hardReset();
     }
 
 }
 
-//SE CREA FUERA DE LA PANTALLA PARA QUE NO SEA VISIBLE
-void crea_bala_player(){
 
-    //Valores iniciales
-    DisparoPlayer.esta_activo = 0;
-    DisparoPlayer.x = FUERA_PANTALLA;
-    DisparoPlayer.y = FUERA_PANTALLA;
-    DisparoPlayer.spr_bala = SPR_addSprite(&sprite_bala_player, DisparoPlayer.x, DisparoPlayer.y,TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
+void createPlayerShot( void ) {
 
-    //lo ponemos por encima de otros sprites ( SI LOS HUBIESE, que no es el caso pero viene bien saberlo)
-    SPR_setDepth(DisparoPlayer.spr_bala,SPR_MIN_DEPTH);
+    playerShot.active = 0;
+    playerShot.x      = OFF_SCREEN;
+    playerShot.y      = OFF_SCREEN;
+    playerShot.sprite = SPR_addSprite(
+        &sprite_bala_player,
+        playerShot.x,
+        playerShot.y,
+        TILE_ATTR( PAL1, TRUE, FALSE, FALSE )
+    );
+
+    SPR_setDepth( playerShot.sprite, SPR_MIN_DEPTH );
 
 }
 
-//SI NO ESTABA ACTIVO el disparo, lo activo (bloqueando el acceso al IF)
-// (es necesario porque por muy r�pido que pulsemos, la MD registrar� un mont�n de pulsaciones)
-//Entonces SITUA el disparo en el centro de la mira
-void maneja_bala_player() {
 
-	if(DisparoPlayer.esta_activo == 0){
+// activates and positions the shot at the aim center (blocked while already active)
+void firePlayerShot( void ) {
 
-        DisparoPlayer.esta_activo = 1;
-
-        DisparoPlayer.x = Mira.x + POS_MIRA;
-        DisparoPlayer.y = Mira.y + POS_MIRA;
-        SPR_setPosition(DisparoPlayer.spr_bala, DisparoPlayer.x, DisparoPlayer.y);
-	}
-}
-
-
-//cambia la animacion manualmente, al terminar hace que el disparo desaparezca (lo ponemos fuera de la pantalla)
-//(en vez de crear y destruir el sprite, no usamos mem dinamica), adem�s desbloquea el disparo para poder volver a disparar
-void trata_bala_player(){
-
-    //cambia entre los frames de la animacion
-    //ademas detecta_colisiones
-    if(DisparoPlayer.esta_activo == 1 || DisparoPlayer.esta_activo == 2 ||
-       DisparoPlayer.esta_activo == 3 || DisparoPlayer.esta_activo == 4)
-    {
-        SPR_nextFrame(DisparoPlayer.spr_bala);
-        DisparoPlayer.esta_activo++;
-        detecta_colision();
+    if ( playerShot.active == 0 ) {
+        playerShot.active = 1;
+        playerShot.x      = aim.x + AIM_OFFSET;
+        playerShot.y      = aim.y + AIM_OFFSET;
+        SPR_setPosition( playerShot.sprite, playerShot.x, playerShot.y );
     }
 
-    //al terminar la animacion DESAPARECE
-    if(DisparoPlayer.esta_activo > 4 )
-    {
-        DisparoPlayer.x = FUERA_PANTALLA;
-        DisparoPlayer.y = FUERA_PANTALLA;
-        SPR_setPosition(DisparoPlayer.spr_bala, DisparoPlayer.x, DisparoPlayer.y);
-        DisparoPlayer.esta_activo = 0;
-    }
 }
 
 
-//PARA OPTIMIZAR solo se ejecuta este codigo durantes los 4 frames de animacion del disparo
-//se compara posicion del disparo con la parte colisionable de cada torre
-//en caso afirmativo, pierde vida y activamos el flag de colision de la torre
-void detecta_colision(){
+// advances animation frames and hides the shot when the 4-frame animation completes
+void updatePlayerShot( void ) {
 
-    for(s16 cont=0; cont<MAX_TORRES; cont++)
-    {
-        if(Torre[cont].vida>0)
-        {
-            if(DisparoPlayer.x > Torre[cont].colX1 && DisparoPlayer.x < Torre[cont].colX2 &&
-               DisparoPlayer.y > Torre[cont].colY1 && DisparoPlayer.y < Torre[cont].colY2  )
-            {
-                    Torre[cont].vida--;
-                    Torre[cont].activa_impacto++;
+    if ( playerShot.active >= 1 && playerShot.active <= 4 ) {
+        SPR_nextFrame( playerShot.sprite );
+        playerShot.active++;
+        detectCollision();
+    }
+
+    if ( playerShot.active > 4 ) {
+        playerShot.x      = OFF_SCREEN;
+        playerShot.y      = OFF_SCREEN;
+        SPR_setPosition( playerShot.sprite, playerShot.x, playerShot.y );
+        playerShot.active = 0;
+    }
+
+}
+
+
+// runs only during the 4 active frames of the shot animation for efficiency
+void detectCollision( void ) {
+
+    for ( s16 i = 0; i < MAX_TOWERS; i++ ) {
+
+        if ( tower[i].health > 0 ) {
+
+            if ( playerShot.x > tower[i].colX1 && playerShot.x < tower[i].colX2 &&
+                 playerShot.y > tower[i].colY1 && playerShot.y < tower[i].colY2 ) {
+                tower[i].health--;
+                tower[i].hitActive++;
             }
+
         }
+
     }
+
 }
 
 
+void drawMessages( void ) {
 
-//AYUDA EN PANTALLA
-void muestraMENSAJES()
-{
-    VDP_setTextPalette(PAL1);   //con la PAL0 no se ve bien
+    VDP_setTextPalette( PAL1 );
 
-    if(ejemplo == 0)
-    {
-    VDP_drawText("EJEMPLO 0: TINTADO CON PALERA DE ROJOS  ", 0, 20);
-    VDP_drawText("     Cambio entre PAL0 y PAL3           ", 0, 21);
-    VDP_drawText("  (dispara sobre la torre de la izq)    ", 0, 22);
-    VDP_drawText("     Pulsa -A- para disparar            ", 0, 23);
-    VDP_drawText("     Pulsa -B- para continuar           ", 0, 24);
+    if ( example == 0 ) {
+        VDP_drawText( "EXAMPLE 0: PALETTE TINT (PAL3 RED)      ", 0, 20 );
+        VDP_drawText( "     Switches between PAL0 and PAL3     ", 0, 21 );
+        VDP_drawText( "  (fire on the left tower)              ", 0, 22 );
+        VDP_drawText( "     Press -A- to fire                  ", 0, 23 );
+        VDP_drawText( "     Press -B- to continue              ", 0, 24 );
     }
 
-    if(ejemplo == 1)
-    {
-    VDP_drawText("EJEMPLO 1:tintado LENTO con PAL de ROJOS", 0, 20);
-    VDP_drawText(" Cambio entre PAL0 y PAL3 pero tarda mas", 0, 21);
-    VDP_drawText(" tiempo en volver a la paleta normal    ", 0, 22);
-    VDP_drawText("                                        ", 0, 23);
-    VDP_drawText("     Pulsa -B- para continuar           ", 0, 24);
+    if ( example == 1 ) {
+        VDP_drawText( "EXAMPLE 1: SLOW PALETTE TINT (PAL3 RED) ", 0, 20 );
+        VDP_drawText( "  Switches PAL0 / PAL3 with longer      ", 0, 21 );
+        VDP_drawText( "  duration before restoring normal pal  ", 0, 22 );
+        VDP_drawText( "                                        ", 0, 23 );
+        VDP_drawText( "     Press -B- to continue              ", 0, 24 );
     }
 
-    if(ejemplo == 2)
-    {
-    VDP_drawText("EJEMPLO 2: TINTADO CON UN SOLO COLOR    ", 0, 20);
-    VDP_drawText("                                        ", 0, 21);
-    VDP_drawText(" Cambio del color 9 de la paleta.       ", 0, 22);
-    VDP_drawText("                                        ", 0, 23);
-    VDP_drawText("     Pulsa -B- para continuar           ", 0, 24);
+    if ( example == 2 ) {
+        VDP_drawText( "EXAMPLE 2: SINGLE COLOR TINT            ", 0, 20 );
+        VDP_drawText( "                                        ", 0, 21 );
+        VDP_drawText( "  Changes color index 9 of the palette  ", 0, 22 );
+        VDP_drawText( "                                        ", 0, 23 );
+        VDP_drawText( "     Press -B- to continue              ", 0, 24 );
     }
 
-    if(ejemplo == 3)
-    {
-    VDP_drawText("EJEMPLO 3: TINTADO CON PAL EN USO       ", 0, 20);
-    VDP_drawText("                                        ", 0, 21);
-    VDP_drawText(" PAL0 y PAL1                            ", 0, 22);
-    VDP_drawText("                                        ", 0, 23);
-    VDP_drawText("     Pulsa -B- para continuar           ", 0, 24);
+    if ( example == 3 ) {
+        VDP_drawText( "EXAMPLE 3: TINT USING EXISTING PALETTE  ", 0, 20 );
+        VDP_drawText( "                                        ", 0, 21 );
+        VDP_drawText( "  Switches between PAL0 and PAL1        ", 0, 22 );
+        VDP_drawText( "                                        ", 0, 23 );
+        VDP_drawText( "     Press -B- to continue              ", 0, 24 );
     }
 
-    if(ejemplo == 4)
-    {
-    VDP_drawText("EJEMPLO 4: BORRADO COMPLETO DEL PLANO A  ", 0, 20);
-    VDP_drawText("Se borra el plano A y se pinta la torre  ", 0, 21);
-    VDP_drawText("de la derecha.                           ", 0, 22);
-    VDP_drawText("                                         ", 0, 23);
-    VDP_drawText("     Pulsa -B- para continuar            ", 0, 24);
+    if ( example == 4 ) {
+        VDP_drawText( "EXAMPLE 4: FULL PLANE A CLEAR           ", 0, 20 );
+        VDP_drawText( "  Clears plane A entirely, then redraws ", 0, 21 );
+        VDP_drawText( "  the right tower.                      ", 0, 22 );
+        VDP_drawText( "                                        ", 0, 23 );
+        VDP_drawText( "     Press -B- to continue              ", 0, 24 );
     }
 
-    if(ejemplo == 5)
-    {
-    VDP_drawText("EJEMPLO 5: BORRADO PARCIAL DEL PLANO A   ", 0, 20);
-    VDP_drawText("Se borra solo la parte del plano A que   ", 0, 21);
-    VDP_drawText("corresponde a la torre de la izq. por    ", 0, 22);
-    VDP_drawText("encima de la muralla                     ", 0, 23);
-    VDP_drawText("     Pulsa -B- para continuar            ", 0, 24);
+    if ( example == 5 ) {
+        VDP_drawText( "EXAMPLE 5: PARTIAL PLANE A CLEAR        ", 0, 20 );
+        VDP_drawText( "  Clears only the left-tower portion    ", 0, 21 );
+        VDP_drawText( "  of plane A (above the wall).          ", 0, 22 );
+        VDP_drawText( "                                        ", 0, 23 );
+        VDP_drawText( "     Press -B- to continue              ", 0, 24 );
     }
 
-    if(ejemplo == 6)
-    {
-    VDP_drawText("EJEMPLO 6: TORRES DESTRUCTIBLES          ", 0, 20);
-    VDP_drawText("                                         ", 0, 21);
-    VDP_drawText(" Dispara sobre ambas torres para         ", 0, 22);
-    VDP_drawText(" destruirlas. Repintado de Tiles         ", 0, 23);
-    VDP_drawText("   Pulsa -B- para REINICIAR la ROM       ", 0, 24);
+    if ( example == 6 ) {
+        VDP_drawText( "EXAMPLE 6: DESTRUCTIBLE TOWERS          ", 0, 20 );
+        VDP_drawText( "                                        ", 0, 21 );
+        VDP_drawText( "  Fire on both towers to destroy them.  ", 0, 22 );
+        VDP_drawText( "  Tile repaint technique.               ", 0, 23 );
+        VDP_drawText( "     Press -B- to RESET                 ", 0, 24 );
     }
+
 }
 
-//PINTA_ VIDA: Escribe en pantalla la vida de cada torre (solo la izq excepto al final)
-void pinta_vida()
-{
-    //"%4d" justific a derechas, si no se pone al poner el contador a 0
-    //los numeros nuevos (1 caracter:0,1,2...) se machacan/mezclan con
-    //los viejos (que tienen hasta 3 caracteres:   999)
 
-    char string01[32], string02[32];
-    sprintf(string01, "%4d", Torre[0].vida);
+void drawHealth( void ) {
 
-    VDP_drawText("Torre[0].vida:",  1, 15);
-    VDP_drawText(string01, 1, 16);
-    if(ejemplo == 6)
-    {
-    sprintf(string02, "%4d", Torre[1].vida);
-    VDP_drawText("Torre[1].vida:",  25, 15);
-    VDP_drawText(string02, 32, 16);
+    char buf1[32], buf2[32];
+
+    sprintf( buf1, "%4d", tower[0].health );
+    VDP_drawText( "Tower[0].health:", 1, 15 );
+    VDP_drawText( buf1, 1, 16 );
+
+    if ( example == 6 ) {
+        sprintf( buf2, "%4d", tower[1].health );
+        VDP_drawText( "Tower[1].health:", 25, 15 );
+        VDP_drawText( buf2, 32, 16 );
     }
+
 }
