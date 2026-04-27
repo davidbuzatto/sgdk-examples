@@ -8,7 +8,7 @@
  */
 
 #include <genesis.h>
-#include "sprites.h"
+#include <sprites.h>
 
 // collision tolerance radius (pixels)
 #define TOLERANCE   10
@@ -24,7 +24,7 @@
 // function declarations — part 1
 static void handleInputPart1( void );
 static void drawPositions( void );
-void hblankCallback( void );
+HINTERRUPT_CALLBACK hblankCallback();
 
 // function declarations — part 2
 static void checkCollision1( void );
@@ -47,6 +47,10 @@ int bullet2Posy = 100;
 
 // 0: HW collision flag,  1: distance-based collision
 int collisionType = 0;
+
+// flag set by hblankCallback when VDP sprite collision is detected;
+// read (and cleared) by the main loop — keeps VDP writes out of interrupt context
+volatile bool spriteCollisionDetected = FALSE;
 
 // part 2: Sonic sprite
 Sprite *sonicSprite;
@@ -76,7 +80,7 @@ int main( bool hard ) {
     PAL_setPalette( PAL1, bullet_sprite.palette->data, CPU );
 
     bulletSprite  = SPR_addSprite( &bullet_sprite, bulletPosx,  bulletPosy,  TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
-    bulletSprite2 = SPR_addSprite( &bullet_sprite, bullet2Posx, bullet2Posx, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    bulletSprite2 = SPR_addSprite( &bullet_sprite, bullet2Posx, bullet2Posy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
     VDP_drawText( "HW AND DISTANCE COLLISION        ", 2, 3  );
     VDP_drawText( "A - HW VDP collision bit         ", 2, 4  );
@@ -96,13 +100,16 @@ int main( bool hard ) {
 
         if ( collisionType == 0 ) {
             VDP_drawText( "HW collision bit active?     ", 2, 20 );
-            if ( GET_VDP_STATUS( VDP_SPRCOLLISION_FLAG ) != 0 ) {
+            // flag is set by hblankCallback (safe to read VDP status there);
+            // cleared here after being consumed so it reflects the latest H-blank result
+            if ( spriteCollisionDetected ) {
                 VDP_drawText( "Yes", 26, 20 );
+                spriteCollisionDetected = FALSE;
             } else {
                 VDP_drawText( "No ", 26, 20 );
             }
         }
-
+        
         if ( collisionType == 1 ) {
             VDP_drawText( "Within collision range?      ", 2, 20 );
             if ( abs( bulletPosx - bullet2Posx ) < TOLERANCE &&
@@ -116,7 +123,7 @@ int main( bool hard ) {
         drawPositions();
 
         SPR_update();
-        VDP_waitVSync();
+        SYS_doVBlankProcess();
 
     }
 
@@ -159,7 +166,7 @@ int main( bool hard ) {
         if ( collisionType == 2 ) { checkCollision2(); }
 
         SPR_update();
-        VDP_waitVSync();
+        SYS_doVBlankProcess();
 
     }
 
@@ -196,7 +203,7 @@ int main( bool hard ) {
         if ( collisionType == 2 ) { checkCollision4(); }
 
         SPR_update();
-        VDP_waitVSync();
+        SYS_doVBlankProcess();
 
     }
 
@@ -208,11 +215,14 @@ int main( bool hard ) {
 /********** PART 1 FUNCTIONS ****************************************/
 
 // reads the HW sprite-collision flag inside the H-blank interrupt
-// (the flag is only reliable when read from within the interrupt handler)
-void hblankCallback( void ) {
+// (the flag is only reliable when read from within the interrupt handler).
+// Only sets a volatile flag — never calls VDP functions from interrupt context,
+// because VDP_drawText would corrupt the VDP first/second-write toggle that the
+// main code relies on for its own VDP address sequences.
+HINTERRUPT_CALLBACK hblankCallback() {
 
     if ( GET_VDP_STATUS( VDP_SPRCOLLISION_FLAG ) != 0 ) {
-        VDP_drawText( "Yes", 26, 20 );
+        spriteCollisionDetected = TRUE;
     }
 
 }
