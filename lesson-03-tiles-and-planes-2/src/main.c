@@ -92,6 +92,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -A- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_A ) {
                 break;
@@ -111,6 +112,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -B- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_B ) {
                 break;
@@ -124,6 +126,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -C- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_C ) {
                 break;
@@ -137,6 +140,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -A- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_A ) {
                 break;
@@ -163,6 +167,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -B- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_B ) {
                 break;
@@ -180,6 +185,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -C- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_C ) {
                 break;
@@ -197,6 +203,7 @@ int main( bool hard ) {
 
         VDP_drawText( "Press -A- to continue", 1, 8 );
         while ( TRUE ) {
+            SYS_doVBlankProcess();
             value = JOY_readJoypad( JOY_1 );
             if ( value & BUTTON_A ) {
                 break;
@@ -205,8 +212,6 @@ int main( bool hard ) {
 
         // soft reset
         reset();
-
-        SYS_doVBlankProcess();
 
     }
 

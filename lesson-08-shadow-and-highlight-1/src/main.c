@@ -14,7 +14,7 @@
 
 // function declarations
 static void handleInput( void );
-void myJoyHandler( u16 joy, u16 changed, u16 state );
+void myJoyHandler( u16 joy, u16 changed, u16 held );
 void reset( void );
 
 // Sonic sprite
@@ -117,7 +117,7 @@ static void handleInput( void ) {
 }
 
 // asynchronous input — A/B/C cycle through shadow/highlight demo states
-void myJoyHandler( u16 joy, u16 changed, u16 state ) {
+void myJoyHandler( u16 joy, u16 changed, u16 held ) {
 
     if ( joy == JOY_1 ) {
 

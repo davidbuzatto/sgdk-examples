@@ -58,27 +58,28 @@ int main( bool hard ) {
         tilemapBuffer[j] = 0;
     }
 
-    // pointer to the priority map image tilemap
-    TileMap *shadowTilemap = bg_priority.tilemap;
+    // pointer to the actual u16 tile-index array inside the priority map image
+    // (bg_priority.tilemap is a TileMap struct; its ->tilemap field is the u16 data)
+    const u16 *shadowTileData = bg_priority.tilemap->tilemap;
 
     // start from the last tile and work backwards
     u16 numTiles = SCENARIO_NUM_TILES;
 
     // PRIORITY PASS -------------------------------------------------------
     // Walk every tile in the screen. For each tile, check the corresponding
-    // entry in the priority map image. If that entry is non-zero (any color
-    // other than palette index 0 / black), mark the plane A tile with high
-    // priority (TILE_ATTR_PRIORITY_MASK). Zero entries are left as-is.
+    // entry in the priority map image. If that entry is non-zero (any tile
+    // other than the blank/transparent tile 0), mark the plane A tile with
+    // high priority (TILE_ATTR_PRIORITY_MASK). Zero entries are left as-is.
     while ( numTiles-- ) {
 
-        if ( shadowTilemap ) {
+        if ( *shadowTileData ) {
             // equivalent to: *planeTilemap = *planeTilemap | TILE_ATTR_PRIORITY_MASK
             // sets only the priority bit; all other tile attributes are preserved
             *planeTilemap |= TILE_ATTR_PRIORITY_MASK;
         }
 
-        planeTilemap++;  // advance to the next plane A tile
-        shadowTilemap++; // advance to the next priority-map tile
+        planeTilemap++;   // advance to the next plane A tile
+        shadowTileData++; // advance to the next priority-map tile (u16, one step = 2 bytes)
 
     }
 
@@ -125,7 +126,7 @@ int main( bool hard ) {
 
         SPR_update();
 
-        VDP_waitVSync();
+        SYS_doVBlankProcess();
 
     }
 

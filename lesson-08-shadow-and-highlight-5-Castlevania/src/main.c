@@ -345,8 +345,9 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
                 tilemapBuffer[j] = 0;
             }
 
-            // pointer to the priority-map image's tilemap (not the image itself)
-            TileMap *shadowTilemap = bg_double_priority.tilemap;
+            // pointer to the actual u16 tile-index array inside the priority map image
+            // (bg_double_priority.tilemap is a TileMap struct; ->tilemap is the u16 data)
+            const u16 *shadowTileData = bg_double_priority.tilemap->tilemap;
             u16 numTiles = SCENARIO_NUM_TILES;
 
             // Walk every tile. If the priority-map tile is non-zero, set the
@@ -354,12 +355,12 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
             // TILE_ATTR_PRIORITY_MASK = 0x8000; tilemapBuffer was zeroed above.
             while ( numTiles-- ) {
 
-                if ( shadowTilemap ) {
+                if ( *shadowTileData ) {
                     *planeTilemap |= TILE_ATTR_PRIORITY_MASK;
                 }
 
                 planeTilemap++;
-                shadowTilemap++;
+                shadowTileData++;  // u16 pointer — advances exactly 2 bytes (one tile entry)
 
             }
 
