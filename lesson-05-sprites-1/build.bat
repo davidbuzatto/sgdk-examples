@@ -1,0 +1,1 @@
+C:\Users\David\sgdk211\bin\make -f C:\Users\David\sgdk211\makefile.gen %*
