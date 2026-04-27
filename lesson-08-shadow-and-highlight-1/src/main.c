@@ -1,224 +1,210 @@
 /**
- *      @Title:  Leccion 08 - "shadow & highlight (1)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 08 - "Shadow and Highlight (1)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
-
 #include <genesis.h>
-#include "fondos.h"  //carga background
-#include "sprite.h"  //carga sprites
-#include <sys.h>     //para el hard reset
+#include "fondos.h"
+#include "sprite.h"
+#include <sys.h>
 
-//Decl. Funciones
+// function declarations
 static void handleInput( void );
-void myJoyHandler( u16 joy, u16 changed, u16 state);
+void myJoyHandler( u16 joy, u16 changed, u16 state );
 void reset( void );
 
-//Sonic sprite
-Sprite* mi_sonic;
+// Sonic sprite
+Sprite *sonicSprite;
 
-// Posicion en pantalla de Sonic
-u32 mi_sonic_posx = 64;
-u32 mi_sonic_posy = 155;
+// Sonic position on screen
+u32 sonicPosx = 64;
+u32 sonicPosy = 155;
 
-//Sprite barra horizontal con paleta completa
-Sprite* mi_barra;
+// horizontal bar sprite (shows the full palette)
+Sprite *barSprite;
 
-// Posicion en pantalla de la barra
-u32 mi_barra_posx = 120;
-u32 mi_barra_posy = 96;
+// bar position on screen
+u32 barPosx = 120;
+u32 barPosy = 96;
 
-//Para los estados
-int estado = 0;
+// current demo state
+int state = 0;
 
-//variable para llevar el control de tiles
+// tile counter in VRAM
 u16 ind;
 
 int main( bool hard ) {
-    //pone la pantalla a 320x224
+
+    // set display resolution to 320x224
     VDP_setScreenWidth320();
 
-    //inicializa motor de sprites
+    // initialize the sprite engine
     SPR_init();
 
-    //recoje la paleta de los fondos y los asigna la 1a del sistema (pal0)
-    PAL_setPalette(PAL0,fondo1.palette->data, CPU);
+    // load the background palette into PAL0
+    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
 
-    //carga los fondos en el VDP
+    // load the background into the VDP
     ind = TILE_USER_INDEX;
-    //VDP_drawImageEx(BG_B, &fondo1, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
-    //ind += fondo1.tileset->numTile;
-    VDP_drawImageEx(BG_A, &fondo1, TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+    // VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    // ind += fondo1.tileset->numTile;
+    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += fondo1.tileset->numTile;
 
-    //recoge la paleta de sonic y la mete en la 2a paleta del sistema (pal1)
-    PAL_setPalette(PAL1,sonic_sprite.palette->data, CPU);
+    // load the Sonic palette into PAL1
+    PAL_setPalette( PAL1, sonic_sprite.palette->data, CPU );
 
-    //recoge la paleta de la barra y la mete en la 3a y 4a paleta del sistema (pal2, pal3)
-    PAL_setPalette(PAL2,barra_sprite.palette->data, CPU);
-    PAL_setPalette(PAL3,barra_sprite.palette->data, CPU);
+    // load the bar palette into PAL2 and PAL3
+    PAL_setPalette( PAL2, barra_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, barra_sprite.palette->data, CPU );
 
-    //a�ade el sprite de la barra
-    mi_barra = SPR_addSprite(&barra_sprite, mi_barra_posx, mi_barra_posy, TILE_ATTR(PAL2, FALSE, FALSE, FALSE));
+    // add the bar sprite
+    barSprite = SPR_addSprite( &barra_sprite, barPosx, barPosy, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
 
-    //a�ade el sprite de Sonic
-    mi_sonic = SPR_addSprite(&sonic_sprite, mi_sonic_posx, mi_sonic_posy, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
+    // add the Sonic sprite
+    sonicSprite = SPR_addSprite( &sonic_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL1, FALSE, FALSE, FALSE ) );
 
-    //deteccion mando
-	JOY_init();
-	JOY_setEventHandler( &myJoyHandler );
+    // register the asynchronous joypad handler
+    JOY_init();
+    JOY_setEventHandler( &myJoyHandler );
 
-	//Texto inicial
-    VDP_drawText("PRUEBA  0", 1, 0);
-    VDP_drawText("-Pulsa A para seguir-", 1, 27);
+    // initial on-screen text
+    VDP_drawText( "TEST  0", 1, 0 );
+    VDP_drawText( "-Press A to continue-", 1, 27 );
 
-    //Bucle principal
-    while(TRUE)
-    {
-        //recoje la entrada de los mandos
+    while ( TRUE ) {
+
+        // read joypad (synchronous) and move the bar
         handleInput();
 
-        //actualiza el VDP
+        // flush sprite updates to the VDP
         SPR_update();
 
-        //sincroniza la Megadrive con la TV
+        // sync with the TV vertical blank
         SYS_doVBlankProcess();
+
     }
 
     return 0;
+
 }
 
-// MANDO DETECCION SINCRONA
-static void handleInput( void )
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-        SPR_setPosition(mi_barra, mi_barra_posx--, mi_barra_posy);
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-        SPR_setPosition(mi_barra, mi_barra_posx++, mi_barra_posy);
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(mi_barra, mi_barra_posx, mi_barra_posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(mi_barra, mi_barra_posx, mi_barra_posy++);
+// synchronous input — moves the bar sprite with the d-pad
+static void handleInput( void ) {
+
+    u16 value = JOY_readJoypad( JOY_1 );
+
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( barSprite, barPosx--, barPosy );
+    }
+
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( barSprite, barPosx++, barPosy );
+    }
+
+    if ( value & BUTTON_UP ) {
+        SPR_setPosition( barSprite, barPosx, barPosy-- );
+    }
+
+    if ( value & BUTTON_DOWN ) {
+        SPR_setPosition( barSprite, barPosx, barPosy++ );
+    }
+
 }
 
-// MANDO DETECCION A-SINCRONA
-// Con A,B,C vamos jugando con las distintas formas de usar S/H
-void myJoyHandler( u16 joy, u16 changed, u16 state)
-{
-	if (joy == JOY_1)
-	{
-	    //ESTADO 0 : partimos de S/H DESACTIVADO
-	    //todo 'aparece normalmente'
+// asynchronous input — A/B/C cycle through shadow/highlight demo states
+void myJoyHandler( u16 joy, u16 changed, u16 state ) {
 
-	    //ESTADO 01: ACTIVA S&H
-	    //todo tiene NO prioridad, por tanto todo se oscurece SHADOW
-        if(estado == 0 && (changed & BUTTON_A) )
-        {
-            estado = 1;
-            VDP_drawText("PRUEBA 01", 1, 0);
-            VDP_drawText("-Pulsa B para seguir-", 1, 27);
-            VDP_setHilightShadow(1);
+    if ( joy == JOY_1 ) {
+
+        // STATE 0: shadow/highlight OFF — everything renders normally
+
+        // STATE 01: enable S&H — all sprites without priority appear in SHADOW mode
+        if ( state == 0 && ( changed & BUTTON_A ) ) {
+            state = 1;
+            VDP_drawText( "TEST 01", 1, 0 );
+            VDP_drawText( "-Press B to continue-", 1, 27 );
+            VDP_setHilightShadow( 1 );
         }
 
-	    //ESTADO 02:
-
-        if(estado == 1 && (changed & BUTTON_B) )
-        {
-            estado = 2;
-            VDP_drawText("PRUEBA 02", 1, 0);
-            VDP_drawText("-Pulsa C para seguir-", 1, 27);
-            SPR_setPriority(mi_sonic, TRUE);
-            SPR_setPriority(mi_barra, FALSE);
+        // STATE 02: Sonic gets high priority (normal), bar stays in shadow
+        if ( state == 1 && ( changed & BUTTON_B ) ) {
+            state = 2;
+            VDP_drawText( "TEST 02", 1, 0 );
+            VDP_drawText( "-Press C to continue-", 1, 27 );
+            SPR_setPriority( sonicSprite, TRUE );
+            SPR_setPriority( barSprite, FALSE );
         }
 
-	    //ESTADO 03:
-
-        if(estado == 2 && (changed & BUTTON_C) )
-        {
-            estado = 3;
-            VDP_drawText("PRUEBA 03", 1, 0);
-            VDP_drawText("-Pulsa A para seguir-", 1, 27);
-            SPR_setPriority(mi_sonic, FALSE);
-            SPR_setPriority(mi_barra, TRUE);
+        // STATE 03: bar gets high priority (highlight), Sonic back in shadow
+        if ( state == 2 && ( changed & BUTTON_C ) ) {
+            state = 3;
+            VDP_drawText( "TEST 03", 1, 0 );
+            VDP_drawText( "-Press A to continue-", 1, 27 );
+            SPR_setPriority( sonicSprite, FALSE );
+            SPR_setPriority( barSprite, TRUE );
         }
 
-	    //ESTADO 04:
-
-        if(estado == 3 && (changed & BUTTON_A) )
-        {
-            estado = 4;
-            VDP_drawText("PRUEBA 04", 1, 0);
-            VDP_drawText("-Pulsa B para seguir-", 1, 27);
-            SPR_setPriority(mi_sonic, FALSE);
-            SPR_setPriority(mi_barra, FALSE);
-            SPR_setPalette(mi_barra, PAL3);
+        // STATE 04: both sprites without priority; bar switches to PAL3
+        if ( state == 3 && ( changed & BUTTON_A ) ) {
+            state = 4;
+            VDP_drawText( "TEST 04", 1, 0 );
+            VDP_drawText( "-Press B to continue-", 1, 27 );
+            SPR_setPriority( sonicSprite, FALSE );
+            SPR_setPriority( barSprite, FALSE );
+            SPR_setPalette( barSprite, PAL3 );
         }
 
-	    //ESTADO 05:
-
-        if(estado == 4 && (changed & BUTTON_B) )
-        {
-            estado = 5;
-            VDP_drawText("PRUEBA 05", 1, 0);
-            VDP_drawText("-Pulsa C para seguir-", 1, 27);
-            SPR_setPriority(mi_barra, TRUE);
+        // STATE 05: bar gets high priority while on PAL3
+        if ( state == 4 && ( changed & BUTTON_B ) ) {
+            state = 5;
+            VDP_drawText( "TEST 05", 1, 0 );
+            VDP_drawText( "-Press C to continue-", 1, 27 );
+            SPR_setPriority( barSprite, TRUE );
         }
 
- 	    //ESTADO 06:
-
-        if(estado == 5 && (changed & BUTTON_C) )
-        {
-            estado = 6;
-            //volvemos a dibujar el fondo, ahora con prioridad
+        // STATE 06: redraw background with high priority — background highlights sprites below it
+        if ( state == 5 && ( changed & BUTTON_C ) ) {
+            state = 6;
             ind = TILE_USER_INDEX;
-            VDP_drawImageEx(BG_A, &fondo1, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+            VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
             ind += fondo2.tileset->numTile;
-            VDP_drawText("PRUEBA 06", 1, 0);
-            VDP_drawText("-Pulsa A para seguir-", 1, 27);
-            SPR_setPriority(mi_sonic, FALSE);
-            SPR_setPriority(mi_barra, FALSE);
+            VDP_drawText( "TEST 06", 1, 0 );
+            VDP_drawText( "-Press A to continue-", 1, 27 );
+            SPR_setPriority( sonicSprite, FALSE );
+            SPR_setPriority( barSprite, FALSE );
         }
 
- 	    //ESTADO 07:
-
-        if(estado == 6 && (changed & BUTTON_A) )
-        {
-            estado = 7;
-            VDP_drawText("PRUEBA 07", 1, 0);
-            VDP_drawText("-Pulsa B para seguir-", 1, 27);
-            //movemos a Sonic a una posici�n m�s visible
-            SPR_setPosition(mi_sonic, mi_sonic_posx-30, mi_sonic_posy);
+        // STATE 07: move Sonic to a more visible position
+        if ( state == 6 && ( changed & BUTTON_A ) ) {
+            state = 7;
+            VDP_drawText( "TEST 07", 1, 0 );
+            VDP_drawText( "-Press B to continue-", 1, 27 );
+            SPR_setPosition( sonicSprite, sonicPosx - 30, sonicPosy );
         }
 
-	    //ESTADO 08:
-
-        if(estado == 7 && (changed & BUTTON_B) )
-        {
-            estado = 8;
-            VDP_drawText("PRUEBA 08", 1, 0);
-            VDP_drawText("-Pulsa C para reiniciar-", 1, 27);
-            SPR_setPriority(mi_sonic, TRUE);
-            SPR_setPriority(mi_barra, TRUE);
+        // STATE 08: both sprites get high priority (highlight)
+        if ( state == 7 && ( changed & BUTTON_B ) ) {
+            state = 8;
+            VDP_drawText( "TEST 08", 1, 0 );
+            VDP_drawText( "-Press C to restart-", 1, 27 );
+            SPR_setPriority( sonicSprite, TRUE );
+            SPR_setPriority( barSprite, TRUE );
         }
 
-        //reseteamos
-        if(estado == 8 && (changed & BUTTON_C) )
-        reset();
+        // RESET
+        if ( state == 8 && ( changed & BUTTON_C ) ) {
+            reset();
+        }
 
-	}
+    }
 
 }
 
-
-// reset
-void reset( void )
-{
+void reset( void ) {
     SYS_hardReset();
 }
-

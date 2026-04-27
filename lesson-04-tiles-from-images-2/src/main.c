@@ -1,31 +1,36 @@
 /**
- *      @Title:  Leccion 04 - "Tiles a partir de imagenes (2)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 04 - "Tiles from Images (2)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
 #include <resources.h>
 
 int main( bool hard ) {
-    
-    //para llevar la cuenta de tiles en VRAM
+
+    // tile counter in VRAM
     u16 ind;
 
-    //recoge la paleta de la imagen y la asigna a la PAL0
-    PAL_setPalette(PAL0, my64tiles.palette->data, CPU);
+    // load the image palette and assign it to PAL0
+    PAL_setPalette( PAL0, my64tiles.palette->data, CPU );
 
-    //esta vez comenzamos a meter tiles en VRAM desde la segunda posici�n
-    //dejamos el primer tile para pintar el fondo
+    // start loading tiles from VRAM position 1 (position 0 is reserved for the background)
     ind = 1;
 
-    // carga la imagen en VRAM y la dibuja en pantalla en la posici�n (3,3)
-    VDP_drawImageEx(BG_B, &my64tiles, TILE_ATTR_FULL(PAL0, 0, 0, 0, ind), 3, 3, 0, CPU);
+    // load the image into VRAM and draw it at tile position (3, 3)
+    VDP_drawImageEx( BG_B, &my64tiles, TILE_ATTR_FULL( PAL0, 0, 0, 0, ind ), 3, 3, 0, CPU );
 
-    //incrementa ind para 'apuntar' a una zona de VRAM libre para futuras tiles
+    // advance the tile counter to the next free VRAM slot
     ind += my64tiles.tileset->numTile;
 
     while ( TRUE ) {
+
         SYS_doVBlankProcess();
+
     }
 
     return 0;

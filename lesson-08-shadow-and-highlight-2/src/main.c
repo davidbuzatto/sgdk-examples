@@ -1,229 +1,237 @@
 /**
- *      @Title:  Leccion 08 - "shadow & highlight (2)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 08 - "Shadow and Highlight (2)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
-
 #include <genesis.h>
-#include "fondos.h"  //carga fondos
-#include "sprite.h"  //carga sprites
+#include "fondos.h"
+#include "sprite.h"
 
-//animaciones del circulo
-#define CIRCULO14   0
-#define CIRCULO15   1
+// circle sprite animation indices
+#define CIRCLE14  0
+#define CIRCLE15  1
 
-//Decl. Funciones
+// function declarations
 static void handleInput( void );
-void myJoyHandler( u16 joy, u16 changed, u16 state);
-void pinta_ayuda_en_pantalla();
+void myJoyHandler( u16 joy, u16 changed, u16 state );
+void drawHelp( void );
 
-//Sprites
-Sprite* mi_sonic;
-Sprite* mi_objetivo;
+// sprites
+Sprite *sonicSprite;
+Sprite *targetSprite;
 
-//Posicion en pantalla de Sonic
-u32 mi_sonic_posx = 64;
-u32 mi_sonic_posy = 155;
+// Sonic position on screen
+u32 sonicPosx = 64;
+u32 sonicPosy = 155;
 
-// Posicion en pantalla del objetivo
-u32 mi_objetivo_posx = 120;
-u32 mi_objetivo_posy = 96;
+// target (circle) position on screen
+u32 targetPosx = 120;
+u32 targetPosy = 96;
 
-//Para activar/desactivar S/H
-int sh_activo = 0;              //S&H activo (1) o no (0)
-int sh_paleta = 2;              //cambia entre paleta2 (2) o paleta3 (3)
-int sh_priori = 0;              //prioridad para el sprite del circulo (1) o no tenerla (0)
-int sh_color  = 14;             //cambia entre el sprite del circulo pintado con el color 14 (14) o el color 15 (15)
-int sh_fondo_priori = 0;        //prioridad para el fondo (1) o no tenerla (0)
+// shadow/highlight toggle states
+int shActive      = 0; // S&H active (1) or off (0)
+int shPalette     = 2; // circle palette: PAL2 (2) or PAL3 (3)
+int shPriority    = 0; // circle sprite priority: high (1) or low (0)
+int shColor       = 14; // circle drawn with color index 14 (14) or 15 (15)
+int shBgPriority  = 0; // background priority: high (1) or low (0)
 
-//variable para llevar el control de tiles
+// tile counter in VRAM
 u16 ind;
 
 int main( bool hard ) {
-    //pone la pantalla a 320x224
+
+    // set display resolution to 320x224
     VDP_setScreenWidth320();
 
-    //inicializa motor de sprites
+    // initialize the sprite engine
     SPR_init();
 
-    //recoje la paleta del fondo y los asigna la 1a del sistema (pal0)
-    PAL_setPalette(PAL0,fondo1.palette->data, CPU);
+    // load the background palette into PAL0
+    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
 
-    //carga fondo en el VDP
+    // load the background into the VDP
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx(BG_A, &fondo1, TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += fondo1.tileset->numTile;
 
-    //recoge la paleta de sonic y la mete en la 2a paleta del sistema (pal1)
-    PAL_setPalette(PAL1,sonic_sprite.palette->data, CPU);
+    // load the Sonic palette into PAL1
+    PAL_setPalette( PAL1, sonic_sprite.palette->data, CPU );
 
-    //recoge la paleta del objetivo y la mete en la 3a y 4a paleta del sistema (pal2, pal3)
-    PAL_setPalette(PAL2,circulo_sprite.palette->data, CPU);
-    PAL_setPalette(PAL3,circulo_sprite.palette->data, CPU);
+    // load the circle palette into PAL2 and PAL3
+    PAL_setPalette( PAL2, circulo_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, circulo_sprite.palette->data, CPU );
 
-    //a�ade el sprite del circulo
-    mi_objetivo = SPR_addSprite(&circulo_sprite, mi_objetivo_posx, mi_objetivo_posy, TILE_ATTR(PAL2, FALSE, FALSE, FALSE));
-    SPR_setAnim(mi_objetivo, CIRCULO14);
+    // add the circle sprite
+    targetSprite = SPR_addSprite( &circulo_sprite, targetPosx, targetPosy, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
+    SPR_setAnim( targetSprite, CIRCLE14 );
 
-    //a�ade el sprite de Sonic
-    mi_sonic = SPR_addSprite(&sonic_sprite, mi_sonic_posx, mi_sonic_posy, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
+    // add the Sonic sprite
+    sonicSprite = SPR_addSprite( &sonic_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
-    //deteccion mando
-	JOY_init();
-	JOY_setEventHandler( &myJoyHandler );
+    // register the asynchronous joypad handler
+    JOY_init();
+    JOY_setEventHandler( &myJoyHandler );
 
-	//AYUDA
-    VDP_drawText("S&H: OFF                                ", 0, 0);
-    VDP_drawText("PALETA CIRCULO: PAL2                    ", 0, 1);
-    VDP_drawText("Prioridad: NO                           ", 0, 2);
-    VDP_drawText("Color circulo: 14                       ", 0, 3);
-    VDP_drawText("Fondo PRIORIDAD: OFF                    ", 0, 4);
-    VDP_drawText("A:SH on/off, B:Paleta, C:Prioridad Circ.", 0, 26);
-    VDP_drawText("X: color14/15, Y: Prioridad Fondo       ", 0, 27);
+    // initial on-screen help
+    VDP_drawText( "S&H: OFF                                ", 0, 0 );
+    VDP_drawText( "CIRCLE PALETTE: PAL2                    ", 0, 1 );
+    VDP_drawText( "Priority: NO                            ", 0, 2 );
+    VDP_drawText( "Circle color: 14                        ", 0, 3 );
+    VDP_drawText( "Background PRIORITY: OFF                ", 0, 4 );
+    VDP_drawText( "A:SH on/off, B:Palette, C:Circle Prio  ", 0, 26 );
+    VDP_drawText( "X: color14/15, Y: Background Priority  ", 0, 27 );
 
+    // shadow/highlight starts disabled
+    VDP_setHilightShadow( 0 );
 
-    VDP_setHilightShadow(0);    // Highlight/shadow NO ACTIVO en el inicio
+    while ( TRUE ) {
 
-    //Bucle principal
-    while(TRUE)
-    {
-        //recoje la entrada de los mandos
+        // read joypad (synchronous) and move the circle
         handleInput();
 
-        //actualiza el VDP
+        // flush sprite updates to the VDP
         SPR_update();
 
-        //sincroniza la Megadrive con la TV
+        // sync with the TV vertical blank
         SYS_doVBlankProcess();
+
     }
 
     return 0;
+
 }
 
-// MANDO DETECCION SINCRONA
-static void handleInput( void )
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-        SPR_setPosition(mi_objetivo, mi_objetivo_posx--, mi_objetivo_posy);
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-        SPR_setPosition(mi_objetivo, mi_objetivo_posx++, mi_objetivo_posy);
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(mi_objetivo, mi_objetivo_posx, mi_objetivo_posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(mi_objetivo, mi_objetivo_posx, mi_objetivo_posy++);
+// synchronous input — moves the circle sprite with the d-pad
+static void handleInput( void ) {
+
+    u16 value = JOY_readJoypad( JOY_1 );
+
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( targetSprite, targetPosx--, targetPosy );
+    }
+
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( targetSprite, targetPosx++, targetPosy );
+    }
+
+    if ( value & BUTTON_UP ) {
+        SPR_setPosition( targetSprite, targetPosx, targetPosy-- );
+    }
+
+    if ( value & BUTTON_DOWN ) {
+        SPR_setPosition( targetSprite, targetPosx, targetPosy++ );
+    }
+
 }
 
+// asynchronous input — A/B/C/X/Y toggle the various shadow/highlight parameters
+void myJoyHandler( u16 joy, u16 changed, u16 state ) {
 
+    if ( joy == JOY_1 ) {
 
-// MANDO DETECCION A-SINCRONA
-// Con A,B,C vamos jugando con las distintas formas de usar S/H
-void myJoyHandler( u16 joy, u16 changed, u16 state)
-{
-	if (joy == JOY_1)
-	{
-        //si pulsamos A...
-        if (state & BUTTON_A)
-        {
-            if(sh_activo)   sh_activo = 0;
-            else            sh_activo = 1;
-
-            VDP_setHilightShadow(sh_activo);
+        // A — toggle shadow/highlight on/off
+        if ( state & BUTTON_A ) {
+            if ( shActive ) {
+                shActive = 0;
+            } else {
+                shActive = 1;
+            }
+            VDP_setHilightShadow( shActive );
         }
 
-        //si pulsamos B...
-        if (state & BUTTON_B)
-        {
-            if(sh_paleta==3)
-            {
-                sh_paleta = 2;
-                SPR_setPalette(mi_objetivo, PAL2);
-            }
-            else
-            {
-                sh_paleta = 3;
-                SPR_setPalette(mi_objetivo, PAL3);
+        // B — toggle circle palette between PAL2 and PAL3
+        if ( state & BUTTON_B ) {
+            if ( shPalette == 3 ) {
+                shPalette = 2;
+                SPR_setPalette( targetSprite, PAL2 );
+            } else {
+                shPalette = 3;
+                SPR_setPalette( targetSprite, PAL3 );
             }
         }
 
-        //si pulsamos C...
-        if (state & BUTTON_C)
-        {
-            if(sh_priori)
-            {
-                sh_priori = 0;
-                SPR_setPriority(mi_objetivo, FALSE);
-            }
-            else
-            {
-                sh_priori = 1;
-                SPR_setPriority(mi_objetivo, TRUE);
+        // C — toggle circle sprite priority
+        if ( state & BUTTON_C ) {
+            if ( shPriority ) {
+                shPriority = 0;
+                SPR_setPriority( targetSprite, FALSE );
+            } else {
+                shPriority = 1;
+                SPR_setPriority( targetSprite, TRUE );
             }
         }
 
-        //si pulsamos X...
-        if (state & BUTTON_X)
-        {
-            if(sh_color==14)
-            {
-                sh_color = 15;
-                SPR_setAnim(mi_objetivo, CIRCULO15);
-            }
-            else
-            {
-                sh_color = 14;
-                SPR_setAnim(mi_objetivo, CIRCULO14);
+        // X — toggle circle between color index 14 and 15
+        if ( state & BUTTON_X ) {
+            if ( shColor == 14 ) {
+                shColor = 15;
+                SPR_setAnim( targetSprite, CIRCLE15 );
+            } else {
+                shColor = 14;
+                SPR_setAnim( targetSprite, CIRCLE14 );
             }
         }
 
-        //si pulsamos Y...
-        //volvemos a dibujar el fondo, con y sin prioridad
-        if (state & BUTTON_Y)
-        {
-            if(sh_fondo_priori)
-            {
-                sh_fondo_priori = 0;
+        // Y — toggle background priority (redraw background with/without high priority)
+        if ( state & BUTTON_Y ) {
+            if ( shBgPriority ) {
+                shBgPriority = 0;
                 ind = TILE_USER_INDEX;
-                VDP_drawImageEx(BG_A, &fondo1, TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+                VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
                 ind += fondo1.tileset->numTile;
-            }
-            else
-            {
-                sh_fondo_priori = 1;
+            } else {
+                shBgPriority = 1;
                 ind = TILE_USER_INDEX;
-                VDP_drawImageEx(BG_A, &fondo1, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+                VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
                 ind += fondo1.tileset->numTile;
             }
         }
-	}
 
-	pinta_ayuda_en_pantalla();
+    }
+
+    drawHelp();
+
 }
 
+// NOTE: the conditions below are intentionally inverted in the original source —
+// the display labels are swapped relative to the actual state values.
+void drawHelp( void ) {
 
-void pinta_ayuda_en_pantalla()
-{
+    if ( shActive ) {
+        VDP_drawText( "S&H: OFF                                ", 0, 0 );
+    } else {
+        VDP_drawText( "S&H: ON                                 ", 0, 0 );
+    }
 
-    if(sh_activo)       VDP_drawText("S&H: OFF                                ", 0, 0);
-    else                VDP_drawText("S&H: ON                                 ", 0, 0);
+    if ( shPalette == 3 ) {
+        VDP_drawText( "CIRCLE PALETTE: PAL2                    ", 0, 1 );
+    } else {
+        VDP_drawText( "CIRCLE PALETTE: PAL3                    ", 0, 1 );
+    }
 
-    if(sh_paleta==3)    VDP_drawText("PALETA CIRCULO: PAL2                    ", 0, 1);
-    else                VDP_drawText("PALETA CIRCULO: PAL3                    ", 0, 1);
+    if ( shPriority ) {
+        VDP_drawText( "Priority: NO                            ", 0, 2 );
+    } else {
+        VDP_drawText( "Priority: YES                           ", 0, 2 );
+    }
 
-    if(sh_priori)       VDP_drawText("Prioridad: NO                           ", 0, 2);
-    else                VDP_drawText("Prioridad: SI                           ", 0, 2);
+    if ( shColor == 14 ) {
+        VDP_drawText( "Circle color: 15                        ", 0, 3 );
+    } else {
+        VDP_drawText( "Circle color: 14                        ", 0, 3 );
+    }
 
-    if(sh_color==14)    VDP_drawText("Color circulo: 15                       ", 0, 3);
-    else                VDP_drawText("Color circulo: 14                       ", 0, 3);
+    if ( shBgPriority ) {
+        VDP_drawText( "Background PRIORITY: OFF                ", 0, 4 );
+    } else {
+        VDP_drawText( "Background PRIORITY: ON                 ", 0, 4 );
+    }
 
-    if(sh_fondo_priori) VDP_drawText("Fondo PRIORIDAD: OFF                    ", 0, 4);
-    else                VDP_drawText("Fondo PRIORIDAD:  ON                    ", 0, 4);
+    VDP_drawText( "A:SH on/off, B:Palette, C:Circle Prio  ", 0, 26 );
+    VDP_drawText( "X: color14/15, Y: Background Priority  ", 0, 27 );
 
-    VDP_drawText("A:SH on/off, B:Paleta, C:Prioridad Circ.", 0, 26);
-    VDP_drawText("X: color14/15, Y: Prioridad Fondo       ", 0, 27);
 }

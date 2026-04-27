@@ -1,504 +1,448 @@
 /**
- *      @Title:  "leccion 09 - "scroll (2) por lineas"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 09 - "Scroll (2) - By Lines" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 /*
-    EJEMPLO 01: Scroll por lineas diversos tipos
-    EJEMPLO 02: Suelo tipo SF2
-    EJEMPLO 03: Efectos con el logo de SEGA
+    STATE 1: line scroll — various effects (clouds + sea)
+    STATE 2: SF2-style perspective floor with Ryu sprite
+    STATE 3: Sega logo horizontal deformation (diagonal warp)
+    STATE 4: line-separation effect (alternating lines drift apart)
 */
 
 #include <genesis.h>
 
-#include "gfx.h"     //carga las im�genes de background
-#include "sprite.h"  //carga los sprites
-#include <sys.h>     //para hacer el reset
+#include "gfx.h"
+#include "sprite.h"
+#include <sys.h>
 
-#define ANIM_STAND   0   //animaciones de Ryu (EJEMPLO 02)
-#define ANIM_WALK    1
+// Ryu animations (state 2)
+#define ANIM_STAND  0
+#define ANIM_WALK   1
 
-
-
-//Declaracion de funciones
+// function declarations
 static void handleInput( void );
-static void cargaESTADO();
-static void muestraMENSAJES();
-static void actualizaCamara();
+static void loadState( void );
+static void drawMessages( void );
+static void updateCamera( void );
+
+// tile counter in VRAM
+u16 ind;
+
+// demo state — increments each time the user advances to the next example
+int state  = 1;
+int locked = 0; // inner loop runs while locked==1; set to 0 to advance state
+
+// state 1: scroll vectors for plane A (full) and two plane B regions
+s16   offsetA        = 0;
+s16   vectorA[224];
+s16   vectorB1[50];          // plane B rows 0..49 (clouds)
+s16   vectorB2[80];          // plane B rows 144..223 (sea)
+fix16 vectorB2Aux[80];
+fix16 vectorB2Accel = FIX16( 0.6 );
+
+// state 2: Ryu sprite
+Sprite *ryuSprite;
+u16    ryuPosx = 160;
+u16    ryuPosy = 120;
+
+#define LIMIT_LEFT   70
+#define LIMIT_RIGHT 260
+
+// state 2: plane B slow horizontal drift
+fix16 offsetB;
+s16   vectorB[224];
+fix16 vectorBAux[224];
+
+#define BG_B_SCROLL_SPEED     FIX16(  0.65 )
+#define BG_B_SCROLL_SPEED_NEG FIX16( -0.65 )
+
+// state 2: SF2-style floor scroll vectors
+//   vectorS      — integer scroll values passed to VDP_setHorizontalScrollLine
+//   vectorSAccel — per-row acceleration; top rows move slower than bottom rows
+//   vectorSAux   — sub-pixel accumulation buffer
+s16   vectorS[40];
+fix16 vectorSAccel[40] = {
+     0.8,  1.0,  1.2,  1.6,  2.0,   2.4,  2.8,  3.2,  3.6,  4.0,
+     4.4,  4.8,  5.2,  5.6,  6.0,   6.4,  6.8,  7.2,  7.6,  8.0,
+     8.4,  8.8,  9.2,  9.6, 10.0,  10.4, 10.8, 11.2, 11.6, 12.0,
+    12.0, 12.0, 12.0, 12.0, 12.0,  12.0, 12.0, 12.0, 12.0, 12.0
+};
+fix16 vectorSAux[40];
+
+// state 3: diagonal scroll table helpers
+#define NUM_COLUMNS  40
+#define NUM_ROWS     28
+#define NUM_LINES    ( NUM_ROWS * 8 )
+
+#define InitializeScrollTable() \
+    for ( u16 i = 0; i < NUM_LINES; i++ ) { line_scroll_data[i] = FIX16( 0 ); }
+
+#define InitializeSpeedTable() \
+    line_speed_data[0] = FIX16( 0 ); \
+    for ( u16 i = 1; i < NUM_LINES; i++ ) { \
+        line_speed_data[i] = line_speed_data[i - 1] + FIX16( 1 ); \
+    }
+
+#define InitializeSpeedTable_dynamic() \
+    line_speed_data[0] = FIX16( 0 ); \
+    for ( u16 i = 1; i < NUM_LINES; i++ ) { \
+        line_speed_data[i] = line_speed_data[i - 1] + FIX16( 1 ); \
+        line_speed_data[i] = line_speed_data[i - 1] + dynamicDiagonal; \
+    }
+
+fix16 dynamicDiagonal = FIX16( 0 );
+
+// state 4: line-separation vectors (even/odd rows drift in opposite directions)
+s16   vSeparation[224];
+fix16 vSeparationAccel[224];
+fix16 vSeparationAux[224];
 
 
-
-//Declaracion de variables
-
-    //Cuenta de tiles en VRAM
-    u16 ind;
-
-    //Para ir pasando por los distintos ejemplos
-    int estado  = 1;
-    int cerrojo = 0;
-
-    //ejemplo 01
-    s16 offsetA = 0;         //desplazamiento plano A
-    s16 vectorA[224];        //todo el plano A
-    s16 vectorB1[50];        //de 0 a 50
-    s16 vectorB2[80];        //144 a 224px
-    fix16 vectorB2_aux[80];            //vector auxiliar
-    fix16 vectorB2_ace = FIX16(0.6);   //constante para la aceleracion
-
-    //ejemplo 02
-    Sprite *spr_ryu;                //sprite RYU
-    u16 spr_posx = 160;             //posicion del sprite
-    u16 spr_posy = 120;
-    #define LIMITE_IZQ           70 //limites de movimiento del sprite
-    #define LIMITE_DCHO         260
-
-    fix16 offsetB;                              //desplazamiento plano B (muy lento)
-    s16 vectorB[224];                           //todo el plano B
-    fix16 vectorB_aux[224];                     //vector auxiliar
-    #define VELOCIDAD_FONDO_B    FIX16(  0.65)  //velocidad desplazamiento plano B
-    #define VELOCIDAD_FONDO_BN   FIX16( -0.65)
-
-    //nota: para el plano A re-uso  algunas vbles del ejemplo 01
-
-
-    //vectores para el manejo del SUELO tipo SF2
-    // vectorS: vector de enteros, se utiliza para pasar los datos de scroll a VDP_setHorizontalScrollLine (que solo admite enteros)
-    // vectorS_ace: vector de aceleracion, define para cada l�nea del suelo cuando debe moverse en cada ciclo, la parte superior del suelo
-    //              se movera m�s lentamente que la inferior. Se ha sacado A OJO comparando con el juego original.
-    // vectorS_aux: vector auxiliar sobre el que se realizan los calculos.
-
-    s16 vectorS[40];
-    fix16 vectorS_ace[40] ={0.8,1.0,1.2,1.6, 2.0,  2.4, 2.8, 3.2, 3.6, 4.0,   4.4, 4.8, 5.2, 5.6, 6.0,  6.4, 6.8, 7.2, 7.6, 8.0,
-                            8.4,8.8,9.2,9.6,10.0, 10.4,10.8,11.2,11.6,12.0,  12.0,12.0,12.0,12.0,12.0, 12.0,12.0,12.0,12.0,12.0};
-    fix16 vectorS_aux[40];
-
-
-    //ejemplo 03: mismo codigo que en el ejemplo "leccion 08-shadow & highlight (5) Castlevania"
-
-    //// CONSTANTES Y METODOS PARA DIAGONALES ////////////
-
-        // Some data to deal with graphical data
-        #define NUM_COLUMNS     40
-        #define NUM_ROWS        28
-        #define NUM_LINES       NUM_ROWS * 8
-        //Pone a 0 todos los elementos de line_scroll_data[]
-        #define InitializeScrollTable(); \
-            for(u16 i = 0; i < NUM_LINES; i++) line_scroll_data[i] = FIX16(0);
-        //Pone la sig secuencia (0,1,2,3...223) en line_speed_data[]
-        #define InitializeSpeedTable(); \
-            line_speed_data[0] = FIX16(0); \
-            for(u16 i = 1; i < NUM_LINES; i++) \
-               line_speed_data[i] = line_speed_data[i-1] + FIX16(1);
-        //idem pero con diagonal dinamica
-        #define InitializeSpeedTable_dinamica(); \
-            line_speed_data[0] = FIX16(0); \
-            for(u16 i = 1; i < NUM_LINES; i++){ \
-               line_speed_data[i] = line_speed_data[i-1] + FIX16(1); \
-               line_speed_data[i] = line_speed_data[i-1] + diagonal_dinamica; }
-        //para la diagonal dinamica
-        fix16 diagonal_dinamica=FIX16(0);
-
-
-    //ejemplo 04: separacion por lineas
-    s16 vSeparacion[224];
-    fix16 vSeparacion_ace[224];
-    fix16 vSeparacion_aux[224];
-
-
-//MAIN
 int main( bool hard ) {
-    //bucle ppal
-    while(TRUE)
-    {
 
-        //En cada ejemplo llamamos a cargaESTADO() para inicializar cada ejemplo correctamente
-        cargaESTADO();
+    while ( TRUE ) {
 
-        //bucle secundario, se abre (cerrojo=0) cada vez que cambiamos de ejemplo=estado
-        //al iniciarse un ejemplo, se cierra (cerrojo=1)
-        while(cerrojo)
-        {
+        loadState();
 
+        while ( locked ) {
 
-            //Controles (sincronos)
             handleInput();
+            drawMessages();
+            updateCamera();
 
-            //muestra Mensajes al usuario
-            muestraMENSAJES();
-
-            //actualiza Camara
-            actualizaCamara();
-
-            //actualiza VDP
             SPR_update();
-
-            //Espera al barrido vertical TV
             SYS_doVBlankProcess();
+
         }
 
-        estado++;
+        state++;
+
     }
 
     return 0;
+
 }
 
 
-static void cargaESTADO()
-{
-    //primero lo resetea todo, quiz�s esta no es la forma m�s elegante
+static void loadState( void ) {
+
     SPR_end();
     VDP_resetScreen();
     VDP_init();
 
+    if ( state == 1 ) {
 
-    //pone algunos vectores a sus valores iniciales (cambian durante los ejemplos)
-    if(estado==1)
-    {
         offsetA = 0;
-        for(int i = 0; i < 224; i++) vectorA[i]  = 0;
-        for(int i = 0; i < 50;  i++) vectorB1[i] = 0;
-        for(int i = 0; i < 80;  i++) vectorB2[i] = 0;
-        for(int i = 0; i < 80;  i++) vectorB2_aux[i]= FIX16(0);
+        for ( int i = 0; i < 224; i++ ) { vectorA[i]     = 0; }
+        for ( int i = 0; i < 50;  i++ ) { vectorB1[i]    = 0; }
+        for ( int i = 0; i < 80;  i++ ) { vectorB2[i]    = 0; }
+        for ( int i = 0; i < 80;  i++ ) { vectorB2Aux[i] = FIX16( 0 ); }
 
-        //320x224px
         VDP_setScreenWidth320();
         VDP_setScreenHeight224();
 
-        //paletas
-        PAL_setPalette(PAL0, bgb_image.palette->data, CPU);
-        PAL_setPalette(PAL1, bga_image.palette->data, CPU);
-        PAL_setPalette(PAL2, ryu_sprite.palette->data, CPU);
+        PAL_setPalette( PAL0, bgb_image.palette->data, CPU );
+        PAL_setPalette( PAL1, bga_image.palette->data, CPU );
+        PAL_setPalette( PAL2, ryu_sprite.palette->data, CPU );
 
-        //inicializa motor de sprites
         SPR_init();
 
-        //backgrounds
         ind = TILE_USER_INDEX;
-        VDP_drawImageEx(BG_B, &bgb_image, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+        VDP_drawImageEx( BG_B, &bgb_image, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
         ind += bgb_image.tileset->numTile;
-        VDP_drawImageEx(BG_A, &bga_image, TILE_ATTR_FULL(PAL1, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+        VDP_drawImageEx( BG_A, &bga_image, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
         ind += bga_image.tileset->numTile;
 
-        //Configura el scroll (por LINEA)
-        VDP_setScrollingMode(HSCROLL_LINE, VSCROLL_PLANE);
+        VDP_setScrollingMode( HSCROLL_LINE, VSCROLL_PLANE );
+
     }
 
-    if(estado==2)
-    {
-        offsetA = 0; offsetB = FIX16(0);
-        for(int i = 0; i < 224; i++) vectorA[i]     = -96;
-        for(int i = 0; i < 224; i++) vectorB[i]     = FIX16(0);
-        for(int i = 0; i < 224; i++) vectorB_aux[i] = FIX16(-56);
+    if ( state == 2 ) {
 
-        for(int i = 0; i < 40;  i++) vectorS[i]     = -96;
-        for(int i = 0; i < 40;  i++) vectorS_aux[i] = FIX16(-96.0);
+        offsetA = 0;
+        offsetB = FIX16( 0 );
+        for ( int i = 0; i < 224; i++ ) { vectorA[i]    = -96; }
+        for ( int i = 0; i < 224; i++ ) { vectorB[i]    = FIX16( 0 ); }
+        for ( int i = 0; i < 224; i++ ) { vectorBAux[i] = FIX16( -56 ); }
+        for ( int i = 0; i < 40;  i++ ) { vectorS[i]    = -96; }
+        for ( int i = 0; i < 40;  i++ ) { vectorSAux[i] = FIX16( -96.0 ); }
 
-        //320x224px
         VDP_setScreenWidth320();
         VDP_setScreenHeight224();
 
-        //paletas
-        PAL_setPalette(PAL0, bgc_image.palette->data, CPU);  //ambos fondos usan esta paleta
-        PAL_setPalette(PAL1, ryu_sprite.palette->data, CPU); //ryu
+        PAL_setPalette( PAL0, bgc_image.palette->data, CPU );
+        PAL_setPalette( PAL1, ryu_sprite.palette->data, CPU );
 
-        //inicializa motor de sprites
         SPR_init();
 
-        //backgrounds
         ind = TILE_USER_INDEX;
-        VDP_drawImageEx(BG_B, &bgd_image, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+        VDP_drawImageEx( BG_B, &bgd_image, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
         ind += bgd_image.tileset->numTile;
-        VDP_drawImageEx(BG_A, &bgc_image, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+        VDP_drawImageEx( BG_A, &bgc_image, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
         ind += bgc_image.tileset->numTile;
 
-        //Configura el scroll (por LINEA)
-        VDP_setScrollingMode(HSCROLL_LINE, VSCROLL_PLANE);
+        VDP_setScrollingMode( HSCROLL_LINE, VSCROLL_PLANE );
 
-        //sprite
-        spr_ryu = SPR_addSprite(&ryu_sprite, spr_posx, spr_posy, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
-        SPR_setHFlip(spr_ryu, TRUE);
+        ryuSprite = SPR_addSprite( &ryu_sprite, ryuPosx, ryuPosy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+        SPR_setHFlip( ryuSprite, TRUE );
+
     }
 
+    if ( state == 3 ) {
 
-    if(estado==3)
-    {
-        //320x224px
         VDP_setScreenWidth320();
         VDP_setScreenHeight224();
 
-        //paletas
-        PAL_setPalette(PAL0, bge_image.palette->data, CPU);
+        PAL_setPalette( PAL0, bge_image.palette->data, CPU );
 
-        //inicializa motor de sprites
         SPR_init();
 
-        //backgrounds
         ind = TILE_USER_INDEX;
-        VDP_drawImageEx(BG_A, &bge_image, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+        VDP_drawImageEx( BG_A, &bge_image, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
         ind += bge_image.tileset->numTile;
 
-        //Configura el scroll (por LINEA)
-        VDP_setScrollingMode(HSCROLL_LINE, VSCROLL_PLANE);
+        VDP_setScrollingMode( HSCROLL_LINE, VSCROLL_PLANE );
+
     }
 
+    if ( state == 4 ) {
 
-    if(estado==4)
-    {
+        for ( int i = 0; i < 224; i++ ) { vSeparation[i]    = 0; }
+        for ( int i = 0; i < 224; i++ ) {
+            vSeparationAccel[i] = ( i % 2 ) ? FIX16( 0.05 ) : FIX16( -0.05 );
+        }
+        for ( int i = 0; i < 224; i++ ) { vSeparationAux[i] = FIX16( 0 ); }
 
-        for(int i = 0; i < 224;  i++)         vSeparacion[i]     = 0;
-        //lineas pares una velocidad, lineas impares la contraria
-        for(int i = 0; i < 224;  i++) if(i%2) vSeparacion_ace[i] = FIX16(0.05); else  vSeparacion_ace[i] = FIX16(-0.05);
-        for(int i = 0; i < 224;  i++)         vSeparacion_aux[i] = FIX16(0);
-
-        //320x224px
         VDP_setScreenWidth320();
         VDP_setScreenHeight224();
 
-        //inicializa motor de sprites
         SPR_init();
 
-        //paletas
-        PAL_setPalette(PAL0,bge_image.palette->data, CPU);
-        //backgrounds
+        PAL_setPalette( PAL0, bge_image.palette->data, CPU );
+
         ind = TILE_USER_INDEX;
-        VDP_drawImageEx(BG_A, &bge_image, TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+        VDP_drawImageEx( BG_A, &bge_image, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
         ind += bge_image.tileset->numTile;
 
-        //Configura el scroll (por LINEA)
-        VDP_setScrollingMode(HSCROLL_LINE, VSCROLL_PLANE);
+        VDP_setScrollingMode( HSCROLL_LINE, VSCROLL_PLANE );
 
     }
 
-
-
-    //finalmente activamos el cerrojo para no salirse del bucle secundario
-    cerrojo = 1;
+    locked = 1;
 
 }
 
 
+static void updateCamera( void ) {
 
-static void actualizaCamara()
-{
-    if(estado == 1)
-    {
-        //plano A
-        for(int i = 0; i < 224; i++) vectorA[i] = offsetA;
-        VDP_setHorizontalScrollLine(BG_A,  0, vectorA, 224, CPU);
+    if ( state == 1 ) {
+
+        // plane A — uniform horizontal scroll across all lines
+        for ( int i = 0; i < 224; i++ ) { vectorA[i] = offsetA; }
+        VDP_setHorizontalScrollLine( BG_A, 0, vectorA, 224, CPU );
         offsetA--;
-        //plano B: nubes
-        for(int i = 0; i < 50; i++)  vectorB1[i] -= 2;
-        VDP_setHorizontalScrollLine(BG_B,  0, vectorB1,  50, CPU);
-        //plano B: mar
-        for(int i = 0; i < 80; i++){
-            vectorB2_aux[i] = vectorB2_aux[i] - vectorB2_ace+i;
-            vectorB2[i] = F16_toInt(vectorB2_aux[i]);
+
+        // plane B rows 0..49 — clouds (constant speed)
+        for ( int i = 0; i < 50; i++ ) { vectorB1[i] -= 2; }
+        VDP_setHorizontalScrollLine( BG_B, 0, vectorB1, 50, CPU );
+
+        // plane B rows 144..223 — sea (accelerating per row)
+        for ( int i = 0; i < 80; i++ ) {
+            vectorB2Aux[i] = vectorB2Aux[i] - vectorB2Accel + i;
+            vectorB2[i]    = F16_toInt( vectorB2Aux[i] );
         }
-        VDP_setHorizontalScrollLine(BG_B,144, vectorB2, 80, CPU);
+        VDP_setHorizontalScrollLine( BG_B, 144, vectorB2, 80, CPU );
+
     }
 
-    if(estado == 2)
-    {
-        //plano A (todo lo que no es el suelo)
-        for(int i = 0; i < 180; i++) vectorA[i] += offsetA;
-        VDP_setHorizontalScrollLine(BG_A,    0, vectorA, 180, CPU);
-        //plano A (suelo)
-        VDP_setHorizontalScrollLine(BG_A,  180, vectorS, 40, CPU);
-        //plano B (completo)
-        for(int i = 0; i < 224; i++){
-            vectorB_aux[i] = vectorB_aux[i] + offsetB;
-            vectorB[i] = F16_toInt(vectorB_aux[i]);
+    if ( state == 2 ) {
+
+        // plane A — rows 0..179 (sky/background above the floor)
+        for ( int i = 0; i < 180; i++ ) { vectorA[i] += offsetA; }
+        VDP_setHorizontalScrollLine( BG_A, 0, vectorA, 180, CPU );
+
+        // plane A — rows 180..219 (floor, perspective scroll)
+        VDP_setHorizontalScrollLine( BG_A, 180, vectorS, 40, CPU );
+
+        // plane B — full height slow drift
+        for ( int i = 0; i < 224; i++ ) {
+            vectorBAux[i] = vectorBAux[i] + offsetB;
+            vectorB[i]    = F16_toInt( vectorBAux[i] );
         }
-        VDP_setHorizontalScrollLine(BG_B,    0, vectorB, 224, CPU);
+        VDP_setHorizontalScrollLine( BG_B, 0, vectorB, 224, CPU );
+
     }
 
-    if(estado == 3)
-    {
-        //en este ejemplo no hacemos nada desde aqui
-    }
+    if ( state == 4 ) {
 
-    if(estado == 4)
-    {
-        //plano A
-        VDP_setHorizontalScrollLine(BG_A,  0, vectorS, 224, CPU);
+        VDP_setHorizontalScrollLine( BG_A, 0, vSeparation, 224, CPU );
+
     }
 
 }
 
 
+static void handleInput( void ) {
 
+    u16 value = JOY_readJoypad( JOY_1 );
 
-
-
-static void handleInput( void )
-{
-    u16 value = JOY_readJoypad(JOY_1);
-
-    if(estado == 1) //abre el cerrojo para salir del bucle secundario
-    {
-        if (value & BUTTON_A) cerrojo=0;
+    if ( state == 1 ) {
+        if ( value & BUTTON_A ) { locked = 0; }
     }
 
-    if(estado == 2)
-    {
-        if (value & BUTTON_B) cerrojo=0;
+    if ( state == 2 ) {
 
-        //si pulsamos izquierda...
-        if (value & BUTTON_LEFT)
-        {
-            if(spr_posx >= LIMITE_IZQ)
-            {
-                SPR_setPosition(spr_ryu, spr_posx-=2, spr_posy);
-                SPR_setAnim(spr_ryu, ANIM_WALK);
-                SPR_setHFlip(spr_ryu, FALSE);
-                offsetA=+1;                 //plano A (todo lo que no es el suelo)
-                offsetB=VELOCIDAD_FONDO_B;  //plano B
+        if ( value & BUTTON_B ) { locked = 0; }
 
-                //plano A (suelo)
-                for(int i = 0; i < 40; i++){
-                    vectorS_aux[i] = vectorS_aux[i] - vectorS_ace[i]; //aceleracion para el suelo
-                    vectorS_aux[i] = vectorS_aux[i] + FIX16(+1);      //mas el desplazamiento del fondo
-                    vectorS[i] = F16_toInt(vectorS_aux[i]);
+        if ( value & BUTTON_LEFT ) {
+
+            if ( ryuPosx >= LIMIT_LEFT ) {
+                SPR_setPosition( ryuSprite, ryuPosx -= 2, ryuPosy );
+                SPR_setAnim( ryuSprite, ANIM_WALK );
+                SPR_setHFlip( ryuSprite, FALSE );
+                offsetA = +1;
+                offsetB = BG_B_SCROLL_SPEED;
+
+                for ( int i = 0; i < 40; i++ ) {
+                    vectorSAux[i] = vectorSAux[i] - vectorSAccel[i]; // per-row deceleration
+                    vectorSAux[i] = vectorSAux[i] + FIX16( +1 );     // plus background offset
+                    vectorS[i]    = F16_toInt( vectorSAux[i] );
                 }
 
-            }else{offsetA = 0; offsetB = FIX16(0);}
+            } else {
+                offsetA = 0;
+                offsetB = FIX16( 0 );
+            }
+
         }
 
-        //si pulsamos derecha...
-        if (value & BUTTON_RIGHT)
-        {
-            if(spr_posx <= LIMITE_DCHO)
-            {
-                SPR_setPosition(spr_ryu, spr_posx+=2, spr_posy);
-                SPR_setAnim(spr_ryu, ANIM_WALK);
-                SPR_setHFlip(spr_ryu, TRUE);
-                offsetA=-1;                    //plano A (todo lo que no es el suelo)
-                offsetB=VELOCIDAD_FONDO_BN;    //plano B
+        if ( value & BUTTON_RIGHT ) {
 
-                //plano A (suelo)
-                for(int i = 0; i < 40; i++){
-                    vectorS_aux[i] = vectorS_aux[i] + vectorS_ace[i]; //aceleracion para el suelo
-                    vectorS_aux[i] = vectorS_aux[i] + FIX16(-1);       //mas el desplazamiento del fondo
-                    vectorS[i] = F16_toInt(vectorS_aux[i]);
+            if ( ryuPosx <= LIMIT_RIGHT ) {
+                SPR_setPosition( ryuSprite, ryuPosx += 2, ryuPosy );
+                SPR_setAnim( ryuSprite, ANIM_WALK );
+                SPR_setHFlip( ryuSprite, TRUE );
+                offsetA = -1;
+                offsetB = BG_B_SCROLL_SPEED_NEG;
+
+                for ( int i = 0; i < 40; i++ ) {
+                    vectorSAux[i] = vectorSAux[i] + vectorSAccel[i]; // per-row acceleration
+                    vectorSAux[i] = vectorSAux[i] + FIX16( -1 );     // plus background offset
+                    vectorS[i]    = F16_toInt( vectorSAux[i] );
                 }
 
-            }else{offsetA = 0; offsetB = FIX16(0);}
+            } else {
+                offsetA = 0;
+                offsetB = FIX16( 0 );
+            }
+
         }
 
-        //si no pulsamos
-        if ((!(value & BUTTON_RIGHT)) && (!(value & BUTTON_LEFT)))
-        {
-            SPR_setAnim(spr_ryu, ANIM_STAND);
-            offsetA = 0; offsetB = FIX16(0);
+        if ( !( value & BUTTON_RIGHT ) && !( value & BUTTON_LEFT ) ) {
+            SPR_setAnim( ryuSprite, ANIM_STAND );
+            offsetA = 0;
+            offsetB = FIX16( 0 );
         }
+
     }
 
-    if(estado == 3) //deformacion logo = ejemplo diagonales de Entrada Castlevania
-    {
-        if (value & BUTTON_C) cerrojo=0;
+    if ( state == 3 ) {
 
-        if(value & BUTTON_RIGHT)
-        {
-            //incrementamos la diagonal
-            diagonal_dinamica = diagonal_dinamica + FIX16(0.025);
-            //como antes
+        if ( value & BUTTON_C ) { locked = 0; }
+
+        if ( value & BUTTON_RIGHT ) {
+
+            dynamicDiagonal = dynamicDiagonal + FIX16( 0.025 );
+
             fix16 line_scroll_data[NUM_LINES];
             fix16 line_speed_data[NUM_LINES];
-            s16 aux[NUM_LINES];
-            //en este caso la tabla cambia
+            s16   aux[NUM_LINES];
+
             InitializeScrollTable();
-            InitializeSpeedTable_dinamica();
+            InitializeSpeedTable_dynamic();
 
-                for(u16 i = 0; i < NUM_LINES; i++)
-                {
-                    line_scroll_data[i] = line_scroll_data[i] + line_speed_data[i];
-                    aux[i] = F16_toInt(line_scroll_data[i]);
-                }
+            for ( u16 i = 0; i < NUM_LINES; i++ ) {
+                line_scroll_data[i] = line_scroll_data[i] + line_speed_data[i];
+                aux[i] = F16_toInt( line_scroll_data[i] );
+            }
 
-                VDP_setHorizontalScrollLine(BG_A, 0, aux, NUM_LINES, 1);
+            VDP_setHorizontalScrollLine( BG_A, 0, aux, NUM_LINES, 1 );
+
         }
 
-        if(value & BUTTON_LEFT)
-        {
-            //incrementamos la diagonal
-            diagonal_dinamica = diagonal_dinamica - FIX16(0.025);
-            //como antes
+        if ( value & BUTTON_LEFT ) {
+
+            dynamicDiagonal = dynamicDiagonal - FIX16( 0.025 );
+
             fix16 line_scroll_data[NUM_LINES];
             fix16 line_speed_data[NUM_LINES];
-            s16 aux[NUM_LINES];
-            //en este caso la tabla cambia
+            s16   aux[NUM_LINES];
+
             InitializeScrollTable();
-            InitializeSpeedTable_dinamica();
+            InitializeSpeedTable_dynamic();
 
-                for(u16 i = 0; i < NUM_LINES; i++)
-                {
-                    line_scroll_data[i] = line_scroll_data[i] + line_speed_data[i];
-                    aux[i] = F16_toInt(line_scroll_data[i]);
-                }
+            for ( u16 i = 0; i < NUM_LINES; i++ ) {
+                line_scroll_data[i] = line_scroll_data[i] + line_speed_data[i];
+                aux[i] = F16_toInt( line_scroll_data[i] );
+            }
 
-                VDP_setHorizontalScrollLine(BG_A, 0, aux, NUM_LINES, 1);
+            VDP_setHorizontalScrollLine( BG_A, 0, aux, NUM_LINES, 1 );
+
         }
+
     }
 
+    if ( state == 4 ) {
 
-    if(estado == 4) //separacion por lineas
-    {
+        if ( value & BUTTON_START ) { SYS_hardReset(); }
 
-        if (value & BUTTON_START) SYS_hardReset();  //reinicia la ROM, hay que a�adir #include <sys.h> en la cabecera
-
-        if(value & BUTTON_RIGHT)
-        {
-                //
-                for(int i = 0; i < 224; i++){
-                    vSeparacion_aux[i] = vSeparacion_aux[i] + vSeparacion_ace[i];
-                    vSeparacion[i] = F16_toInt(vSeparacion_aux[i]);
-                }
+        if ( value & BUTTON_RIGHT ) {
+            for ( int i = 0; i < 224; i++ ) {
+                vSeparationAux[i] = vSeparationAux[i] + vSeparationAccel[i];
+                vSeparation[i]    = F16_toInt( vSeparationAux[i] );
+            }
         }
-        if(value & BUTTON_LEFT)
-        {
-                //
-                for(int i = 0; i < 224; i++){
-                    vSeparacion_aux[i] = vSeparacion_aux[i] - vSeparacion_ace[i];
-                    vSeparacion[i] = F16_toInt(vSeparacion_aux[i]);
-                }
+
+        if ( value & BUTTON_LEFT ) {
+            for ( int i = 0; i < 224; i++ ) {
+                vSeparationAux[i] = vSeparationAux[i] - vSeparationAccel[i];
+                vSeparation[i]    = F16_toInt( vSeparationAux[i] );
+            }
         }
+
     }
 
 }
 
 
+static void drawMessages( void ) {
 
-
-
-
-
-static void muestraMENSAJES()
-{
-
-    if(estado == 1) //estado inicial al empezar el programa
-    {
-    VDP_drawText("Ejemplo 01", 18, 10);
-    VDP_drawText("Pulsa -A- para continuar", 18, 11);
+    if ( state == 1 ) {
+        VDP_drawText( "Example 01: line scroll effects", 4, 10 );
+        VDP_drawText( "Press -A- to continue          ", 4, 11 );
     }
 
-    if(estado == 2)
-    {
-    VDP_drawText("Ejemplo 02", 18, 10);
-    VDP_drawText("LEFT/RIGHT: Movimiento", 18, 12);
-    VDP_drawText("Pulsa -B- para continuar", 18, 13);
+    if ( state == 2 ) {
+        VDP_drawText( "Example 02: SF2-style floor    ", 4, 10 );
+        VDP_drawText( "LEFT/RIGHT: move               ", 4, 12 );
+        VDP_drawText( "Press -B- to continue          ", 4, 13 );
     }
 
-    if(estado == 3)
-    {
-    VDP_drawText("Ejemplo 03", 10, 22);
-    VDP_drawText("LEFT/RIGHT: Diagonal", 10, 23);
-    VDP_drawText("Pulsa -C- para continuar", 10, 24);
+    if ( state == 3 ) {
+        VDP_drawText( "Example 03: Sega logo warp     ", 10, 22 );
+        VDP_drawText( "LEFT/RIGHT: adjust diagonal    ", 10, 23 );
+        VDP_drawText( "Press -C- to continue          ", 10, 24 );
     }
 
-    if(estado == 4)
-    {
-    VDP_drawText("Ejemplo 04", 10, 22);
-    VDP_drawText("LEFT/RIGHT: Separacion", 10, 23);
-    VDP_drawText("Pulsa -START- para REINICIAR", 10, 24);
+    if ( state == 4 ) {
+        VDP_drawText( "Example 04: line separation    ", 10, 22 );
+        VDP_drawText( "LEFT/RIGHT: spread lines       ", 10, 23 );
+        VDP_drawText( "Press -START- to reset         ", 10, 24 );
     }
+
 }

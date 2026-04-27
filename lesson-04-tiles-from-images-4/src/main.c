@@ -1,128 +1,141 @@
 /**
- *      @Title:  Leccion 04 - "Tiles a partir de im�genes (4)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 04 - "Tiles from Images (4)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
 #include <resources.h>
 
-//declaracion de funciones
+// function declarations
 static void handleInput( void );
 
 int main( bool hard ) {
 
-    //vector donde copiaremos los colores de la/s paleta/s
-    //NO ES LA PALETA, es un vector y modificarlo no modifica la paleta
-    u16 paleta_completa[64];
+    // local copy of all four palettes (64 entries total, 16 per palette)
+    // modifying this array does NOT affect the hardware palette directly
+    u16 fullPalette[64];
 
-    //para llevar la cuenta de tiles en VRAM
+    // tile counter in VRAM
     u16 ind;
 
-    //Tiles en VRAM desde la 2a pos (1er tile para pintar el fondo)
+    // start loading tiles from VRAM position 1 (position 0 is reserved for the background)
     ind = 1;
 
-    //desactiva el acceso al VDP
-	/*
-	Desactiva temporalmente cualquier tipo de interrupci�n (Vertical, Horizontal and External) al
-	VDP, de esa forma podemos 'toquetearlo' a placer sin que una interrupci�n pare lo que estamos
-	haciendo y deje a mitad el trabajo
-    */
+    // disable VDP interrupts so we can update VRAM without being interrupted
+    // (Vertical, Horizontal and External interrupts are all disabled)
     SYS_disableInts();
 
-    //Inicializa a 320x240px
+    // set display resolution to 320x240
     VDP_setScreenWidth320();
 
-    //Ponemos TODA LA PALETA (las 4 paletas) completamente en negro
-    /* PAL_setColors( indice_color(0-63), valor_RGB, num_colores_afectados, transfer method)
-	  Esta funci�n pone un total de 'num_colores_afectados' al valor 'valor_RGB'.
-	  Esto lo hace desde el color 'indice_color' hasta 'indice_color+num_colores_afectados'
-	  En este caso: del color 0 al 63, todos -> un total de 64 colores
-	*/
-	// El motivo: hacer un fade_in (de pantalla negra a pantalla normal)
-    PAL_setColors(0, (u16*) palette_black, 64, CPU); //palette_black = paleta SGDK negros
+    // set ALL 64 palette entries to black — preparation for a fade-in effect
+    // PAL_setColors( start_index, rgb_value, num_colors, transfer_method )
+    //   sets 'num_colors' entries starting at 'start_index' to 'rgb_value'
+    //   here: colors 0..63 all set to black
+    PAL_setColors( 0, (u16 *) palette_black, 64, CPU );
 
-    //carga las imagenes en VRAM e incrementa ind
-    VDP_drawImageEx(BG_B, &bgb_image, TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+    // load both background images into VRAM using DMA for speed
+    VDP_drawImageEx( BG_B, &bgb_image, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += bgb_image.tileset->numTile;
-    VDP_drawImageEx(BG_A, &bga_image, TILE_ATTR_FULL(PAL1, FALSE, FALSE, FALSE, ind), 20, 0, FALSE, TRUE);
+
+    VDP_drawImageEx( BG_A, &bga_image, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 20, 0, FALSE, TRUE );
     ind += bga_image.tileset->numTile;
 
-    //Volvemos a activar las interrupciones del VDP
+    // re-enable VDP interrupts
     SYS_enableInts();
 
-    //recoge las paletas de cada imagen y mete dichos valores en el vector
-    memcpy(&paleta_completa[0],  bgb_image.palette->data, 16 * 2);
-    memcpy(&paleta_completa[16], bga_image.palette->data, 16 * 2);
+    // copy both image palettes into the local array
+    memcpy( &fullPalette[0],  bgb_image.palette->data, 16 * 2 );
+    memcpy( &fullPalette[16], bga_image.palette->data, 16 * 2 );
 
-    //FACE IN
-    /* PAL_fadeIn(from_color, to_color, pal_final, num_frames, asyn)
-       Esta funci�n realiza un fade-in de la paleta actual a la paleta 'pal_final',
-       utilizando para ello 'num_frames'. Tener en cuenta 60 frames/seg (NTCS).
-       Podemos elegir para qu� colores. En este caso, todos:
-                     from_color = 0 hasta el color to_color=63
-       'asyn' =0 o FALSE  --> El programa se detiene hasta que termine el fade-in
-       'asyn' =0 o TRUE   --> El programa continua mientras se hace el fade-in
-    */
-    //Probar a cambiar TRUE y FALSE
-    PAL_fadeIn(0, 63, paleta_completa, 100, FALSE);
+    // FADE IN
+    // PAL_fadeIn( from_color, to_color, target_palette, num_frames, async )
+    //   performs a fade from the current (all-black) palette to 'target_palette'
+    //   over 'num_frames' frames. At 60 fps (NTSC) this is ~1.67 seconds.
+    //   from_color=0, to_color=63 — all 64 entries affected.
+    //   async=FALSE — execution blocks until the fade completes.
+    //   async=TRUE  — execution continues while the fade runs in the background.
+    PAL_fadeIn( 0, 63, fullPalette, 100, FALSE );
 
     while ( TRUE ) {
-        //leer controles, se llama siempre una vez por frame
+
+        // read controls — called once per frame
         handleInput();
 
         SYS_doVBlankProcess();
+
     }
 
     return 0;
 
 }
 
-
 static void handleInput( void ) {
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
 
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)    VDP_drawText("IZQUIERDA", 8, 10);
+    // store the current joypad state
+    u16 value = JOY_readJoypad( JOY_1 );
 
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)   VDP_drawText("DERECHA", 20, 10);
+    if ( value & BUTTON_LEFT ) {
+        VDP_drawText( "LEFT", 8, 10 );
+    }
 
-    //si pulsamos izquierda...
-    if (value & BUTTON_UP)      VDP_drawText("ARRIBA", 16, 8);
+    if ( value & BUTTON_RIGHT ) {
+        VDP_drawText( "RIGHT", 20, 10 );
+    }
 
-    //si pulsamos derecha...
-    if (value & BUTTON_DOWN)    VDP_drawText("ABAJO", 16, 12);
+    if ( value & BUTTON_UP ) {
+        VDP_drawText( "UP", 16, 8 );
+    }
 
-    //si pulsamos A...
-    if (value & BUTTON_A)       VDP_drawText("BOTON A", 6, 18);
+    if ( value & BUTTON_DOWN ) {
+        VDP_drawText( "DOWN", 16, 12 );
+    }
 
-    //si pulsamos B...
-    if (value & BUTTON_B)       VDP_drawText("BOTON B", 14, 18);
+    if ( value & BUTTON_A ) {
+        VDP_drawText( "BUTTON A", 6, 18 );
+    }
 
-    //si pulsamos C...
-    if (value & BUTTON_C)       VDP_drawText("BOTON C", 22, 18);
+    if ( value & BUTTON_B ) {
+        VDP_drawText( "BUTTON B", 14, 18 );
+    }
 
-    //si pulsamos X...
-    if (value & BUTTON_X)       VDP_drawText("BOTON X", 6, 20);
+    if ( value & BUTTON_C ) {
+        VDP_drawText( "BUTTON C", 22, 18 );
+    }
 
-    //si pulsamos Y...
-    if (value & BUTTON_Y)       VDP_drawText("BOTON Y", 14, 20);
+    if ( value & BUTTON_X ) {
+        VDP_drawText( "BUTTON X", 6, 20 );
+    }
 
-    //si pulsamos Z...
-    if (value & BUTTON_Z)       VDP_drawText("BOTON Z", 22, 20);
+    if ( value & BUTTON_Y ) {
+        VDP_drawText( "BUTTON Y", 14, 20 );
+    }
 
-    //si pulsamos START...
-    if (value & BUTTON_START)   VDP_drawText("START", 10, 16);
+    if ( value & BUTTON_Z ) {
+        VDP_drawText( "BUTTON Z", 22, 20 );
+    }
 
-    //si pulsamos MODE...
-    if (value & BUTTON_MODE)    VDP_drawText("MODE", 20, 16);
+    if ( value & BUTTON_START ) {
+        VDP_drawText( "START", 10, 16 );
+    }
 
-   //si NO pulsamos nada, borra todo del t�tulo hacia abajo (VDP_clearTextArea() trabaja en tiles)
-    if ((!(value & BUTTON_UP))   && (!(value & BUTTON_DOWN)) &&(!(value & BUTTON_LEFT)) &&
-        (!(value & BUTTON_RIGHT))&& (!(value & BUTTON_A))    &&(!(value & BUTTON_B))    &&
-        (!(value & BUTTON_C))    && (!(value & BUTTON_X))    &&(!(value & BUTTON_Y))    &&
-        (!(value & BUTTON_Z))    && (!(value & BUTTON_MODE)) &&(!(value & BUTTON_START)))
-        VDP_clearTextArea(0,7,40,28);
+    if ( value & BUTTON_MODE ) {
+        VDP_drawText( "MODE", 20, 16 );
+    }
+
+    // if no button is pressed, clear the area below the title
+    // VDP_clearTextArea() works in tiles
+    if ( !( value & BUTTON_UP )    && !( value & BUTTON_DOWN )  &&
+         !( value & BUTTON_LEFT )  && !( value & BUTTON_RIGHT ) &&
+         !( value & BUTTON_A )     && !( value & BUTTON_B )     &&
+         !( value & BUTTON_C )     && !( value & BUTTON_X )     &&
+         !( value & BUTTON_Y )     && !( value & BUTTON_Z )     &&
+         !( value & BUTTON_MODE )  && !( value & BUTTON_START ) ) {
+        VDP_clearTextArea( 0, 7, 40, 28 );
+    }
 
 }

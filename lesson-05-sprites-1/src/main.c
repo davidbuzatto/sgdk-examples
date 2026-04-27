@@ -1,112 +1,118 @@
 /**
- *      @Title:  Leccion 05 - "sprites (1)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 05 - "Sprites (1)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
-#include "sprites.h"  //para generar el .h a partir del .res
+#include "sprites.h"
 
-//Declaracion de funciones
+// function declarations
 static void handleInput( void );
-static void pinta_posicion( void );
+static void drawPosition( void );
 
-//Puntero a los sprites y puntero a puntero de sprites
-Sprite* mi_sprite_cuadrado;
-Sprite* mi_sprite_sonic;
-Sprite* mi_sprite;
+// sprite pointers
+Sprite *squareSprite;
+Sprite *sonicSprite;
+Sprite *currentSprite;
 
-//Posicion en pantalla del sprite
+// current sprite position on screen
 int posx;
 int posy;
 
 int main( bool hard ) {
 
-    //Posicion inicial del sprite
+    // initial sprite position
     posx = 0;
     posy = 0;
 
-    //pone la pantalla a 320x224
+    // set display resolution to 320x224
     VDP_setScreenWidth320();
 
-    //Inicializa motor de sprites con los par�metros por defecto
+    // initialize the sprite engine with default parameters
     SPR_init();
 
-    //Recoje la paleta del sprite y la mete en la 2a paleta del sistema
-    //ojo que si lo hacemos con la PAL0 el texto de las coordenadas sale EN NEGRO y no se ver�
-    PAL_setPalette(PAL1,sprite_8x8.palette->data, CPU);
+    // load the sprite palette into the second system palette slot
+    // (using PAL0 would make the coordinate text invisible — it renders in black)
+    PAL_setPalette( PAL1, sprite_8x8.palette->data, CPU );
 
-    //Crea sprites
-    mi_sprite_cuadrado = SPR_addSprite(&sprite_8x8, posx, posy, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
-    mi_sprite_sonic    = SPR_addSprite(&sprite_sonic, posx, posy, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));
+    // create both sprites at the initial position
+    squareSprite  = SPR_addSprite( &sprite_8x8,    posx, posy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    sonicSprite   = SPR_addSprite( &sprite_sonic,   posx, posy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
-        //El puntero (a puntero) apunta al sprite actual: en el inicio, el cuadrado
-        mi_sprite = mi_sprite_cuadrado;
+    // start with the square sprite active
+    currentSprite = squareSprite;
 
-    //Bucle principal
-    while(TRUE)
-    {
-        //recoje la entrada de los mandos
+    while ( TRUE ) {
+
+        // read joypad and update sprite position
         handleInput();
 
-        //escribe la posicion del sprite
-        pinta_posicion();
+        // display the current position on screen
+        drawPosition();
 
-        //actualiza el VDP
+        // flush sprite updates to the VDP
         SPR_update();
 
-        //sincroniza la Megadrive con la TV
+        // sync with the TV vertical blank
         SYS_doVBlankProcess();
+
     }
 
     return 0;
+
 }
 
-//Funcion handleInput() : recoje la entrada del mando (pad) y actualiza la posicion
-//del sprite, sumando o restando de la variable posx y de poxsy
-//Adem�s cambia de sprite 'al vuelo'
-static void handleInput( void )
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-        SPR_setPosition(mi_sprite, posx--, posy);
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-        SPR_setPosition(mi_sprite, posx++, posy);
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(mi_sprite, posx, posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(mi_sprite, posx, posy++);
+// reads joypad input and moves the active sprite;
+// also switches between the two sprites on A/B
+static void handleInput( void ) {
 
-    //si pulsamos A...
-    if ((value & BUTTON_A)&&(mi_sprite == mi_sprite_sonic)){
-        mi_sprite = mi_sprite_cuadrado;
-        SPR_setPosition(mi_sprite, posx, posy); //necesario para q actualice al momento la TV
-        }
-    //si pulsamos B...
-    if ((value & BUTTON_B)&&(mi_sprite == mi_sprite_cuadrado)){
-        mi_sprite = mi_sprite_sonic;
-        SPR_setPosition(mi_sprite, posx, posy);
-        }
+    u16 value = JOY_readJoypad( JOY_1 );
+
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( currentSprite, posx--, posy );
+    }
+
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( currentSprite, posx++, posy );
+    }
+
+    if ( value & BUTTON_UP ) {
+        SPR_setPosition( currentSprite, posx, posy-- );
+    }
+
+    if ( value & BUTTON_DOWN ) {
+        SPR_setPosition( currentSprite, posx, posy++ );
+    }
+
+    // switch to the square sprite
+    if ( ( value & BUTTON_A ) && ( currentSprite == sonicSprite ) ) {
+        currentSprite = squareSprite;
+        SPR_setPosition( currentSprite, posx, posy ); // force immediate screen update
+    }
+
+    // switch to the Sonic sprite
+    if ( ( value & BUTTON_B ) && ( currentSprite == squareSprite ) ) {
+        currentSprite = sonicSprite;
+        SPR_setPosition( currentSprite, posx, posy );
+    }
+
 }
 
-//Funci�m pinta_posicion() : Escribe en pantalla la posici�n del sprite
-static void pinta_posicion( void )
-{
-    //declaramos una cadena de caracteres
-    //sprintf : pasa un valor numerico(posx / posy) a caracteres y los copia
-    //en la cadena anterior. %4d alinea a la derecha, importante para al pasar
-    //de numeros negativos a positivos todo salga correctamente
+// writes the current sprite position to the screen
+// sprintf converts numeric values to strings; %4d right-aligns to handle
+// the transition from negative to positive numbers cleanly
+static void drawPosition( void ) {
 
-    char cadena1[32];
-    sprintf(cadena1, "x:  %4d", posx);
-    VDP_drawText(cadena1, 2, 23);
+    char buf[32];
 
-    char cadena2[32];
-    sprintf(cadena2, "y:  %4d", posy);
-    VDP_drawText(cadena2, 2, 24);
+    sprintf( buf, "x:  %4d", posx );
+    VDP_drawText( buf, 2, 23 );
+
+    sprintf( buf, "y:  %4d", posy );
+    VDP_drawText( buf, 2, 24 );
 
 }

@@ -1,11 +1,15 @@
 /**
- *      @Title:  Leccion 03 - "tiles y planos (1)"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 03 - "Tiles and Planes (1)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
 
-#define MI_TILE 1
+#define MY_TILE 1
 
 const u32 tile[8] = {
     0x44444421,
@@ -20,37 +24,39 @@ const u32 tile[8] = {
 
 int main( bool hard ) {
 
-    //carga el tile en VRAM
-    VDP_loadTileData( (const u32 *)tile, MI_TILE, 1, 0);
+    // load the tile into VRAM
+    VDP_loadTileData( (const u32 *) tile, MY_TILE, 1, 0 );
 
-    //dibuja el tile en el plano A en pos (1,5) con la paleta por defecto (pal 0)
-    VDP_setTileMapXY(BG_A, MI_TILE, 1, 5);
+    // draw the tile on plane A at position (1, 5) using the default palette (PAL0)
+    VDP_setTileMapXY( BG_A, MY_TILE, 1, 5 );
 
-    //Dibuja el tile usando TILE_ATTR_FULL()
-    //primer par�metro: paleta. PAL2 = paleta de verdes
-    //segund par�metro: prioridad. 0 = baja prioridad
-    //tercer par�metro: volteo vertical. 1 = vflip
-    //cuarto par�metro: volteo horizon. 0 = no hflip
-    //quinto par�metro: tile referenciado.
-    VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL2, 0, 0, 0, MI_TILE), 3, 5);
+    // draw the tile using TILE_ATTR_FULL():
+    //   first  param: palette — PAL2 = green palette
+    //   second param: priority — 0 = low priority
+    //   third  param: vertical flip — 1 = vflip
+    //   fourth param: horizontal flip — 0 = no hflip
+    //   fifth  param: tile index in VRAM
+    VDP_setTileMapXY( BG_A, TILE_ATTR_FULL( PAL2, 0, 0, 0, MY_TILE ), 3, 5 );
 
-    //Dibuja 2 veces el tile, la primera vez en el plano B con pal 0 (grises)
-    //la segunda en el plano A con pal1 (rojos),
-    VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL0, 0, 0, 0, MI_TILE), 5, 5);
-    VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL1, 0, 0, 0, MI_TILE), 5, 5);
+    // draw the tile twice: once on plane B with PAL0 (grays), once on plane A with PAL1 (reds)
+    VDP_setTileMapXY( BG_B, TILE_ATTR_FULL( PAL0, 0, 0, 0, MY_TILE ), 5, 5 );
+    VDP_setTileMapXY( BG_A, TILE_ATTR_FULL( PAL1, 0, 0, 0, MY_TILE ), 5, 5 );
 
-    //Dibuja 2 veces el tile, igual que antes pero el tile del plano B con alta prioridad
-    VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(PAL0, 1, 0, 0, MI_TILE), 7, 5);
-    VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL1, 0, 0, 0, MI_TILE), 7, 5);
+    // same as above, but the plane B tile has high priority — it renders on top
+    VDP_setTileMapXY( BG_B, TILE_ATTR_FULL( PAL0, 1, 0, 0, MY_TILE ), 7, 5 );
+    VDP_setTileMapXY( BG_A, TILE_ATTR_FULL( PAL1, 0, 0, 0, MY_TILE ), 7, 5 );
 
-    //dibuja la tile volteada horizontalmente, verticalmente y luego ambas a la vez
-    VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 1, 0, 1, MI_TILE), 3, 8);
-    VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 1, 1, 0, MI_TILE), 5, 8);
-    VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 1, 1, 1, MI_TILE), 7, 8);
+    // draw the tile flipped horizontally, vertically, and both at once
+    VDP_setTileMapXY( BG_A, TILE_ATTR_FULL( PAL0, 1, 0, 1, MY_TILE ), 3, 8 );
+    VDP_setTileMapXY( BG_A, TILE_ATTR_FULL( PAL0, 1, 1, 0, MY_TILE ), 5, 8 );
+    VDP_setTileMapXY( BG_A, TILE_ATTR_FULL( PAL0, 1, 1, 1, MY_TILE ), 7, 8 );
 
     while ( TRUE ) {
+
         SYS_doVBlankProcess();
+
     }
 
     return 0;
+
 }

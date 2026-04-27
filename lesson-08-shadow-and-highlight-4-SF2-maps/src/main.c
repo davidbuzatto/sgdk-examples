@@ -1,184 +1,178 @@
 /**
- *      @Title:  Leccion 05 - "leccion 08-shadow & higlight (4) SF2 Mapas"
- *      @Original_by: RealBrucest
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus" (based on original by RealBrucest)
+ * @brief Lesson 08 - "Shadow and Highlight (4) - SF2 with Priority Maps" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
 
-#include "fondos.h" //carga fondos
-#include "sprite.h" //carga sprites
+#include "fondos.h"
+#include "sprite.h"
 
-//animaciones
-#define ANIM_STAND      0
-#define ANIM_WALK       1
+// sprite animations
+#define ANIM_STAND  0
+#define ANIM_WALK   1
 
-// CONSTANTES PARA EL MAPA DE PRIORIDADES/TILES ////////////
+// screen dimensions in tiles (one plane = 40x28 tiles)
+#define SCREEN_WIDTH_TILES    40
+#define SCREEN_HEIGHT_TILES   28
 
-//La pantalla (un plano) son 40�28 tiles
-#define SCREEN_WIDTH_TILES     40
-#define SCREEEN_HEIGHT_TILES   28
+#define SCENARIO_POS_X        0
+#define SCENARIO_POS_Y        0
 
-#define SCENARIO_POS_X          0
-#define SCENARIO_POS_Y          0
+#define SCENARIO_WIDTH_TILES  SCREEN_WIDTH_TILES
+#define SCENARIO_HEIGHT_TILES SCREEN_HEIGHT_TILES
 
-#define SCENARIO_WIDTH_TILES    SCREEN_WIDTH_TILES
-#define SCENARIO_HEIGHT_TILES   SCREEEN_HEIGHT_TILES
-//Total tiles de la pantalla = 40x28 = 1120 tiles
-#define SCENARIO_NUM_TILES      SCENARIO_WIDTH_TILES * SCENARIO_HEIGHT_TILES
+// total tiles in one screen = 40 x 28 = 1120
+#define SCENARIO_NUM_TILES    ( SCENARIO_WIDTH_TILES * SCENARIO_HEIGHT_TILES )
 
-
-//declaracion de funciones
+// function declarations
 static void handleInput( void );
 
-//variables globales
+// sprites
+Sprite *ryuSprite;
+Sprite *shadowSprite;
+Sprite *hadokenSprite;
 
-//sprite
-Sprite* spr_ryu;
-Sprite* spr_sombra;
-Sprite* spr_hadoken;
+// initial sprite positions
+u32 ryuPosx      = 120;
+u32 ryuPosy      = 120;
+u32 hadokenPosx  = 150;
+u32 hadokenPosy  = 130;
 
-//Posici�n inicial en pantalla del sprite
-u32 ryu_posx = 120;
-u32 ryu_posy = 120;
-u32 hadoken_posx = 150;
-u32 hadoken_posy = 130;
-
-
-///////////////////////////////////////////////////////////
-// MAIN
-///////////////////////////////////////////////////////////
 int main( bool hard ) {
 
-    // DATOS _________________________________________
+    // SETUP ---------------------------------------------------------------
 
-    // Scenario (planes)
-    //crea una vector con tantas posiciones como tiles tiene la pantalla (1120)
-    u16 tilemap_buffer[SCENARIO_NUM_TILES];
-    //puntero a la primera posici�n del vector
-    u16 *aplan_tilemap = &tilemap_buffer[0];
-    //inicializa el vector todo a cero (por defecto hay 'basura')
-    for(int j=0; j<SCENARIO_NUM_TILES;j++) tilemap_buffer[j]=0;
+    // tilemap buffer for plane A — one entry per screen tile
+    u16 tilemapBuffer[SCENARIO_NUM_TILES];
 
-    //puntero a la imagen "mapa de prioridades"
-    TileMap *shadowmap_tilemap = bg_prioridad.tilemap;
-    //para contar, valor inicial tiles totales de una pantalla
-    u16 numtiles = SCENARIO_NUM_TILES;
+    // pointer to the first buffer entry
+    u16 *planeTilemap = &tilemapBuffer[0];
 
-    // PROCESO ____________________________________________
-
-    // RECORRE tile a tile y seg�n criterio marcamos prioridad (o no)
-    // recorremos desde el ultimo al primer tile, para cada uno comprobamos el valor de ese tile
-    // en el mapa de prioridades, si es 0 (color negro, indice 0 de paleta), no hacemos nada
-    // si NO es cero (cualquier otro color, indice distinto 0 de paleta) marcamos ese tile
-    // con prioridad (TILE_ATTR_PRIORITY_MASK)
-    while(numtiles--)
-    {
-        if(shadowmap_tilemap)
-            *aplan_tilemap |= TILE_ATTR_PRIORITY_MASK; //equivale a *aplan_tilemap = *aplan_tilemap | TILE_ATTR_PRIORITY_MASK;
-                                                       //TILE_ATTR_PRIORITY_MASK se carga toda la info del tile EXCEPTO la info de prioridad
-
-        aplan_tilemap++;        //avanza en el vector
-        shadowmap_tilemap++;    //avanza en el otro vector
+    // zero-initialise the buffer (default content is undefined)
+    for ( int j = 0; j < SCENARIO_NUM_TILES; j++ ) {
+        tilemapBuffer[j] = 0;
     }
 
-    //EN ESTE PUNTO tenemos el vector del mapa de prioridades, en cada posicion tiles configuradas con la prioridad
+    // pointer to the priority map image tilemap
+    TileMap *shadowTilemap = bg_prioridad.tilemap;
 
-    // Carga en el plano A en posiciones 0,0 con dimensiones 40x28 tiles el contenido que hay en &tilemap_buffer[0]
-    VDP_setTileMapDataRectEx(BG_A, &tilemap_buffer[0], 0/*u16 basetile*/,
+    // start from the last tile and work backwards
+    u16 numTiles = SCENARIO_NUM_TILES;
+
+    // PRIORITY PASS -------------------------------------------------------
+    // Walk every tile in the screen. For each tile, check the corresponding
+    // entry in the priority map image. If that entry is non-zero (any color
+    // other than palette index 0 / black), mark the plane A tile with high
+    // priority (TILE_ATTR_PRIORITY_MASK). Zero entries are left as-is.
+    while ( numTiles-- ) {
+
+        if ( shadowTilemap ) {
+            // equivalent to: *planeTilemap = *planeTilemap | TILE_ATTR_PRIORITY_MASK
+            // sets only the priority bit; all other tile attributes are preserved
+            *planeTilemap |= TILE_ATTR_PRIORITY_MASK;
+        }
+
+        planeTilemap++;  // advance to the next plane A tile
+        shadowTilemap++; // advance to the next priority-map tile
+
+    }
+
+    // At this point tilemapBuffer holds all 1120 tile entries with their
+    // priority bits correctly set based on the priority map image.
+
+    // upload the priority tilemap to plane A at position (0, 0), 40x28 tiles
+    VDP_setTileMapDataRectEx(
+        BG_A, &tilemapBuffer[0], 0,
         SCENARIO_POS_X, SCENARIO_POS_Y,
-        SCENARIO_WIDTH_TILES, SCENARIO_HEIGHT_TILES, SCENARIO_WIDTH_TILES, CPU);
+        SCENARIO_WIDTH_TILES, SCENARIO_HEIGHT_TILES, SCENARIO_WIDTH_TILES, CPU
+    );
 
-    // Carga el planoB (el escenario "real" tal cual es, nada raro)
-    VDP_drawImage(BG_B, &bg_B_real, SCENARIO_POS_X, SCENARIO_POS_Y);
+    // load plane B with the real background image as-is
+    VDP_drawImage( BG_B, &bg_B_real, SCENARIO_POS_X, SCENARIO_POS_Y );
 
-    // Init and load the sprite
-    //SPR_init(16, 256, 256);
-    //SPR_init();
-    SPR_initEx(528);
+    // SPRITES -------------------------------------------------------------
 
-    // Set the palette taken from the scenario (BLAN image)
-    PAL_setPalette(PAL0, (u16*) bg_B_real.palette->data, CPU);
+    // SPR_init( 16, 256, 256 );
+    // SPR_init();
+    SPR_initEx( 528 );
 
-    // Set the palette from the sprite
-    PAL_setPalette(PAL1, (u16*) mi_sprite_ryu.palette->data, CPU);
-    PAL_setPalette(PAL3, (u16*) mi_sprite_hadoken.palette->data, CPU);
+    // palette from the background image
+    PAL_setPalette( PAL0, (u16 *) bg_B_real.palette->data, CPU );
 
-    spr_ryu = SPR_addSprite(&mi_sprite_ryu, ryu_posx, ryu_posy, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
-    spr_sombra = SPR_addSprite(&mi_sprite_sombra, ryu_posx, ryu_posy+70, TILE_ATTR(PAL3, FALSE, FALSE, FALSE));
-    spr_hadoken = SPR_addSprite(&mi_sprite_hadoken, hadoken_posx, hadoken_posy, TILE_ATTR(PAL3, TRUE, FALSE, FALSE));
+    // palettes from the sprite sheets
+    PAL_setPalette( PAL1, (u16 *) mi_sprite_ryu.palette->data, CPU );
+    PAL_setPalette( PAL3, (u16 *) mi_sprite_hadoken.palette->data, CPU );
 
+    ryuSprite     = SPR_addSprite( &mi_sprite_ryu,     ryuPosx,      ryuPosy,          TILE_ATTR( PAL1, FALSE, FALSE, FALSE ) );
+    shadowSprite  = SPR_addSprite( &mi_sprite_sombra,  ryuPosx,      ryuPosy + 70,     TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
+    hadokenSprite = SPR_addSprite( &mi_sprite_hadoken,  hadokenPosx,  hadokenPosy,     TILE_ATTR( PAL3, TRUE,  FALSE, FALSE ) );
 
+    // enable shadow/highlight mode
+    VDP_setHilightShadow( 1 );
 
-    // Enable HL/S mode
-    VDP_setHilightShadow(1);
-
-    SPR_setHFlip(spr_ryu, TRUE);
-    SPR_setHFlip(spr_hadoken, TRUE);
+    SPR_setHFlip( ryuSprite, TRUE );
+    SPR_setHFlip( hadokenSprite, TRUE );
     SPR_update();
 
-    // LOOP
-    while(TRUE)
-    {
+    while ( TRUE ) {
+
         handleInput();
 
         SPR_update();
 
         VDP_waitVSync();
+
     }
 
     return 0;
+
 }
 
-
-//Recoge la entrada del mando y actualiza la posicion del sprite
+// reads joypad and updates sprite positions and animations
 static void handleInput( void ) {
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
 
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-    {
-        SPR_setPosition(spr_ryu, ryu_posx--, ryu_posy);
-        SPR_setPosition(spr_sombra, ryu_posx--, ryu_posy+70);
-        SPR_setAnim(spr_ryu, ANIM_WALK);
-        SPR_setHFlip(spr_ryu, FALSE);
+    u16 value = JOY_readJoypad( JOY_1 );
+
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( ryuSprite,    ryuPosx--,  ryuPosy );
+        SPR_setPosition( shadowSprite, ryuPosx--,  ryuPosy + 70 );
+        SPR_setAnim( ryuSprite, ANIM_WALK );
+        SPR_setHFlip( ryuSprite, FALSE );
     }
 
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-    {
-        SPR_setPosition(spr_ryu, ryu_posx++, ryu_posy);
-        SPR_setPosition(spr_sombra, ryu_posx++, ryu_posy+70);
-        SPR_setAnim(spr_ryu, ANIM_WALK);
-        SPR_setHFlip(spr_ryu, TRUE);
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( ryuSprite,    ryuPosx++,  ryuPosy );
+        SPR_setPosition( shadowSprite, ryuPosx++,  ryuPosy + 70 );
+        SPR_setAnim( ryuSprite, ANIM_WALK );
+        SPR_setHFlip( ryuSprite, TRUE );
     }
 
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-    {
-        SPR_setPosition(spr_ryu, ryu_posx, ryu_posy--);
-        SPR_setPosition(spr_sombra, ryu_posx, ryu_posy+69);
+    if ( value & BUTTON_UP ) {
+        SPR_setPosition( ryuSprite,    ryuPosx, ryuPosy-- );
+        SPR_setPosition( shadowSprite, ryuPosx, ryuPosy + 69 );
     }
 
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-    {
-        SPR_setPosition(spr_ryu, ryu_posx, ryu_posy++);
-        SPR_setPosition(spr_sombra, ryu_posx, ryu_posy+69);
+    if ( value & BUTTON_DOWN ) {
+        SPR_setPosition( ryuSprite,    ryuPosx, ryuPosy++ );
+        SPR_setPosition( shadowSprite, ryuPosx, ryuPosy + 69 );
     }
 
-    //si pulsamos A
-    if (value & BUTTON_A)
-       SPR_setPosition(spr_hadoken, hadoken_posx++, hadoken_posy);
-    //si pulsamos A
-    if (value & BUTTON_B)
-       SPR_setPosition(spr_hadoken, hadoken_posx--, hadoken_posy);
+    if ( value & BUTTON_A ) {
+        SPR_setPosition( hadokenSprite, hadokenPosx++, hadokenPosy );
+    }
 
-    //si no pulsamos
-    if ((!(value & BUTTON_RIGHT)) && (!(value & BUTTON_LEFT)))
-    {
-        SPR_setAnim(spr_ryu, ANIM_STAND);
+    if ( value & BUTTON_B ) {
+        SPR_setPosition( hadokenSprite, hadokenPosx--, hadokenPosy );
+    }
+
+    // no horizontal input — return to stand animation
+    if ( !( value & BUTTON_RIGHT ) && !( value & BUTTON_LEFT ) ) {
+        SPR_setAnim( ryuSprite, ANIM_STAND );
     }
 
 }

@@ -1,133 +1,132 @@
 /**
- *      @Title:  Leccion 08 - "shadow & higlight (3) SF2"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 08 - "Shadow and Highlight (3) - Street Fighter II" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
-
 #include <genesis.h>
-#include "fondos.h"  //carga background
-#include "sprite.h"  //carga sprites
+#include "fondos.h"
+#include "sprite.h"
 
-#define ANIM_STAND      0
-#define ANIM_WALK       1
+#define ANIM_STAND  0
+#define ANIM_WALK   1
 
-//entrada del mando
+// function declarations
 static void handleInput( void );
 
-//Sprites
-Sprite* spr_ryu;
-Sprite* spr_sombra;
-Sprite* spr_hadoken;
+// sprites
+Sprite *ryuSprite;
+Sprite *shadowSprite;
+Sprite *hadokenSprite;
 
-//Posicion inicial en pantalla de los sprites
-u32 posx = 120;
-u32 posy = 120;
-u32 hadoken_posx = 150;
-u32 hadoken_posy = 130;
+// initial sprite positions on screen
+u32 posx           = 120;
+u32 posy           = 120;
+u32 hadokenPosx    = 150;
+u32 hadokenPosy    = 130;
 
-//Prioridad del hadoken
-bool prioridad_hadoken = TRUE;
+// hadoken starts with high priority
+bool hadokenPriority = TRUE;
 
 int main( bool hard ) {
-    //variable para llevar el control de tiles
+
+    // tile counter in VRAM
     u16 ind;
 
-    //pone la pantalla a 320x224
+    // set display resolution to 320x224
     VDP_setScreenWidth320();
 
-    //inicializa motor de sprites
+    // initialize the sprite engine
     SPR_init();
 
-    //recoje las paletas de los fondos y los asigna a la primera y segunda paleta del sistema
-    PAL_setPalette(PAL0,fondo1.palette->data, CPU);
-    PAL_setPalette(PAL1,fondo2.palette->data, CPU);
+    // load background palettes
+    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
+    PAL_setPalette( PAL1, fondo2.palette->data, CPU );
 
-    //carga los fondos en el VDP
+    // load both backgrounds into the VDP
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx(BG_A, &fondo1, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += fondo1.tileset->numTile;
-    VDP_drawImageEx(BG_B, &fondo2, TILE_ATTR_FULL(PAL1, TRUE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+    VDP_drawImageEx( BG_B, &fondo2, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += fondo2.tileset->numTile;
 
-    //recoje la paleta de los sprites
-    PAL_setPalette(PAL2,mi_sprite_ryu.palette->data, CPU);
-    PAL_setPalette(PAL3,mi_sprite_sombra.palette->data, CPU);
+    // load sprite palettes
+    PAL_setPalette( PAL2, mi_sprite_ryu.palette->data, CPU );
+    PAL_setPalette( PAL3, mi_sprite_sombra.palette->data, CPU );
 
-    //a�ade sprites
-    spr_ryu = SPR_addSprite(&mi_sprite_ryu, posx, posy, TILE_ATTR(PAL2, TRUE, FALSE, FALSE));
-    spr_sombra = SPR_addSprite(&mi_sprite_sombra, posx, posy+70, TILE_ATTR(PAL3, TRUE, FALSE, FALSE));
-    spr_hadoken = SPR_addSprite(&mi_sprite_hadoken, hadoken_posx, hadoken_posy, TILE_ATTR(PAL3, prioridad_hadoken, FALSE, FALSE));
+    // add sprites
+    ryuSprite    = SPR_addSprite( &mi_sprite_ryu,    posx,          posy,          TILE_ATTR( PAL2, TRUE,               FALSE, FALSE ) );
+    shadowSprite = SPR_addSprite( &mi_sprite_sombra, posx,          posy + 70,     TILE_ATTR( PAL3, TRUE,               FALSE, FALSE ) );
+    hadokenSprite= SPR_addSprite( &mi_sprite_hadoken, hadokenPosx,  hadokenPosy,   TILE_ATTR( PAL3, hadokenPriority,    FALSE, FALSE ) );
 
-    VDP_setHilightShadow(1);    // Highlight/shadow ACTIVO
+    // enable shadow/highlight mode
+    VDP_setHilightShadow( 1 );
 
-    SPR_setHFlip(spr_ryu, TRUE);
-    SPR_setHFlip(spr_hadoken, TRUE);
+    SPR_setHFlip( ryuSprite, TRUE );
+    SPR_setHFlip( hadokenSprite, TRUE );
 
-
-	//AYUDA EN PANTALLA
-	VDP_setTextPalette(PAL3); //paleta de la sombra para el texto, SGDK coge color15 de dicha paleta
-	VDP_drawText("SHADOW & HIGHLIGHT : SF2                ", 2, 1);
-    VDP_drawText("D-PAD: MOV RYU, A/B: MOV HA-DO-KEN      ", 2, 2);
+    // on-screen help (text uses PAL3 so it renders in the shadow layer)
+    VDP_setTextPalette( PAL3 );
+    VDP_drawText( "SHADOW & HIGHLIGHT : SF2                ", 2, 1 );
+    VDP_drawText( "D-PAD: MOVE RYU, A/B: MOVE HA-DO-KEN   ", 2, 2 );
 
     SPR_update();
 
-    //Bucle principal
-    while(TRUE)
-    {
-        //recoje la entrada de los mandos
+    while ( TRUE ) {
+
         handleInput();
-        //actualiza el VDP
+
         SPR_update();
-        //sincroniza la Megadrive con la TV
+
         SYS_doVBlankProcess();
+
     }
 
     return 0;
+
 }
 
-//Recoge la entrada del mando y actualiza la posicion del sprite
-static void handleInput( void )
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-    {
-        SPR_setPosition(spr_ryu, posx--, posy);
-        SPR_setPosition(spr_sombra, posx--, posy+70);
-        SPR_setAnim(spr_ryu, ANIM_WALK);
-        SPR_setHFlip(spr_ryu, FALSE);
+// reads joypad and updates sprite positions and animations
+static void handleInput( void ) {
+
+    u16 value = JOY_readJoypad( JOY_1 );
+
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( ryuSprite,    posx--,        posy );
+        SPR_setPosition( shadowSprite, posx--,        posy + 70 );
+        SPR_setAnim( ryuSprite, ANIM_WALK );
+        SPR_setHFlip( ryuSprite, FALSE );
     }
 
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-    {
-        SPR_setPosition(spr_ryu, posx++, posy);
-        SPR_setPosition(spr_sombra, posx++, posy+70);
-        SPR_setAnim(spr_ryu, ANIM_WALK);
-        SPR_setHFlip(spr_ryu, TRUE);
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( ryuSprite,    posx++,        posy );
+        SPR_setPosition( shadowSprite, posx++,        posy + 70 );
+        SPR_setAnim( ryuSprite, ANIM_WALK );
+        SPR_setHFlip( ryuSprite, TRUE );
     }
 
-    //si pulsamos arriba...
-    if (value & BUTTON_UP)
-        SPR_setPosition(spr_ryu, posx, posy--);
-    //si pulsamos abajo...
-    if (value & BUTTON_DOWN)
-        SPR_setPosition(spr_ryu, posx, posy++);
+    if ( value & BUTTON_UP ) {
+        SPR_setPosition( ryuSprite, posx, posy-- );
+    }
 
-    //si pulsamos A
-    if (value & BUTTON_A)
-       SPR_setPosition(spr_hadoken, hadoken_posx++, hadoken_posy);
-    //si pulsamos B
-    if (value & BUTTON_B)
-       SPR_setPosition(spr_hadoken, hadoken_posx--, hadoken_posy);
+    if ( value & BUTTON_DOWN ) {
+        SPR_setPosition( ryuSprite, posx, posy++ );
+    }
 
+    if ( value & BUTTON_A ) {
+        SPR_setPosition( hadokenSprite, hadokenPosx++, hadokenPosy );
+    }
 
+    if ( value & BUTTON_B ) {
+        SPR_setPosition( hadokenSprite, hadokenPosx--, hadokenPosy );
+    }
 
-    //si no pulsamos
-    if ((!(value & BUTTON_RIGHT)) && (!(value & BUTTON_LEFT)))
-    {
-        SPR_setAnim(spr_ryu, ANIM_STAND);
+    // no horizontal input — return to stand animation
+    if ( !( value & BUTTON_RIGHT ) && !( value & BUTTON_LEFT ) ) {
+        SPR_setAnim( ryuSprite, ANIM_STAND );
     }
 
 }

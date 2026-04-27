@@ -1,184 +1,172 @@
 /**
- *      @Title:  Leccion 05 - "Sprites (3) enemigos"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 05 - "Sprites (3) Enemies" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
 
-#include "fondos.h"   //carga las 2 imágenes de background
-#include "sprites.h"  //carga el sprite de Sonic
+#include "fondos.h"
+#include "sprites.h"
 
-#define ANIM_STAND      0
-#define ANIM_RUN        3
+#define ANIM_STAND  0
+#define ANIM_RUN    3
 
-//Declaramos la funcion para recoger la entrada del mando
+// function declarations
 static void handleInput( void );
+static void moveEnemies( void );
+static void drawPosition( void );
 
-//Funcion para mover enemigos
-static void mueveEnemigos();
+// Sonic sprite pointer
+Sprite *sonicSprite;
 
-//Funcion para pintar la pos Y de la avispa
-static void pinta_posicion( void );
-
-//Declaramos una variable (un puntero) para referirnos al sprite de Sonic
-Sprite* mi_sonic;
-
-// Posicion en pantalla del sprite
+// Sonic position on screen
 int posx = 64;
 int posy = 155;
 
-//Enemigos
-Sprite* enemigo[2];
+// enemy sprite pointers and positions
+Sprite *enemy[2];
+u16 enemyPosx[2];
+int enemyPosy[2];
+int enemyDirection;
 
-//Posicion en pantalla de los enemigos
-u16 enemigoPosx[2];
-int enemigoPosy[2];
-int enemigoSentidoMovimiento;
-
-//Para el mov senoidal
-#define CONST 84
-
+// constant for the sinusoidal movement baseline
+#define SINE_BASELINE 84
 
 int main( bool hard ) {
-    //variable para llevar el control de tiles
+
+    // tile counter in VRAM
     u16 ind;
 
-    //pone la pantalla a 320x224
+    // set display resolution to 320x224
     VDP_setScreenWidth320();
 
-    //inicializa motor de sprites
+    // initialize the sprite engine
     SPR_init();
 
-    //recoje las paletas de los fondos y los asigna a la primera y segunda paleta del sistema
-    PAL_setPalette(PAL0,fondo1.palette->data, CPU);
-    PAL_setPalette(PAL1,fondo2.palette->data, CPU);
+    // load background palettes
+    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
+    PAL_setPalette( PAL1, fondo2.palette->data, CPU );
 
-    //carga los fondos en el VDP
+    // load background images into the VDP
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx(BG_B, &fondo1, TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+
+    VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += fondo1.tileset->numTile;
-    VDP_drawImageEx(BG_A, &fondo2, TILE_ATTR_FULL(PAL1, FALSE, FALSE, FALSE, ind), 0, 0, FALSE, TRUE);
+
+    VDP_drawImageEx( BG_A, &fondo2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
     ind += fondo2.tileset->numTile;
 
-    //recoje la paleta de sonic y la mete en la 3a paleta del sistema
-    PAL_setPalette(PAL2,sonic_sprite.palette->data, CPU);
+    // load the Sonic palette into PAL2
+    PAL_setPalette( PAL2, sonic_sprite.palette->data, CPU );
 
-    //añade el sprite de Sonic
-    mi_sonic = SPR_addSprite(&sonic_sprite, posx, posy, TILE_ATTR(PAL2, TRUE, FALSE, FALSE));
+    // add the Sonic sprite
+    sonicSprite = SPR_addSprite( &sonic_sprite, posx, posy, TILE_ATTR( PAL2, TRUE, FALSE, FALSE ) );
 
-    //añade los enemigos
+    // set up enemies
+    enemyPosx[0] = 128;
+    enemyPosy[0] = 164;
+    enemyPosx[1] = 260;
+    enemyPosy[1] = 84;
+    enemyDirection = 1;
 
-        //posicion
-        enemigoPosx[0] = 128;
-        enemigoPosy[0] = 164;
-        enemigoPosx[1] = 260;
-        enemigoPosy[1] = 84;
-        enemigoSentidoMovimiento =  1;
+    // load enemy palette into PAL3
+    PAL_setPalette( PAL3, enemies_sprite.palette->data, CPU );
 
-        //recoge la paleta de los enemigos y la mete en la 4a paleta del sistema
-        PAL_setPalette(PAL3,enemies_sprite.palette->data, CPU);
+    // add enemy sprites
+    enemy[0] = SPR_addSprite( &enemies_sprite, enemyPosx[0], enemyPosy[0], TILE_ATTR( PAL3, TRUE, FALSE, FALSE ) );
+    enemy[1] = SPR_addSprite( &enemies_sprite, enemyPosx[1], enemyPosy[1], TILE_ATTR( PAL3, TRUE, FALSE, FALSE ) );
 
-        //sprite
-        enemigo[0] = SPR_addSprite(&enemies_sprite, enemigoPosx[0], enemigoPosy[0], TILE_ATTR(PAL3, TRUE, FALSE, FALSE));
-        enemigo[1] = SPR_addSprite(&enemies_sprite, enemigoPosx[1], enemigoPosy[1], TILE_ATTR(PAL3, TRUE, FALSE, FALSE));
+    // assign the correct animation to each enemy
+    SPR_setAnim( enemy[0], 1 ); // crab animation (second animation in the sheet)
+    SPR_setAnim( enemy[1], 0 ); // wasp animation (first animation in the sheet)
 
-        //asigna la animacion correcta (o todos tendrán la primera animación del fichero png)
-        SPR_setAnim(enemigo[0], 1); //asigna la animacion del cangrejo (la segunda, 1, del png)
-        SPR_setAnim(enemigo[1], 0); //asigna la animacion de la avispa (la primera, 0, del png) <- no es necesaria
+    SPR_update(); // recommended initial flush
 
-        SPR_update(); // <- no es necesaria pero recomendable
+    while ( TRUE ) {
 
-
-    //Bucle principal
-    while(TRUE)
-    {
-        //recoje la entrada de los mandos
+        // read joypad and move Sonic
         handleInput();
 
-        //mueve los enemigos
-        mueveEnemigos();
+        // update enemy positions
+        moveEnemies();
 
-        //pinta la pos de la avispa
-        pinta_posicion();
+        // display the wasp's Y position on screen
+        drawPosition();
 
-        //actualiza el VDP
+        // flush sprite updates to the VDP
         SPR_update();
 
-        //sincroniza la Megadrive con la TV
+        // sync with the TV vertical blank
         SYS_doVBlankProcess();
+
     }
 
     return 0;
-}
-
-//Funcion handleInput()  recoje la entrada del mando (izq,dcha) y actualiza la posicion
-//del sprite mi_sonic, sumando o restando de la variable posx
-//además le damos la vuelta al sprite al movernos horizontalmente
-static void handleInput( void )
-{
-    //variable donde se guarda la entrada del mando
-    u16 value = JOY_readJoypad(JOY_1);
-    //si pulsamos izquierda...
-    if (value & BUTTON_LEFT)
-    {
-        SPR_setPosition(mi_sonic, posx--, posy);
-        SPR_setHFlip(mi_sonic, TRUE);
-        SPR_setAnim(mi_sonic, ANIM_RUN);
-        //SPR_setVFlip(mi_sonic, TRUE);
-    }
-
-    //si pulsamos derecha...
-    if (value & BUTTON_RIGHT)
-    {
-        SPR_setPosition(mi_sonic, posx++, posy);
-        SPR_setHFlip(mi_sonic, FALSE);
-        SPR_setAnim(mi_sonic, ANIM_RUN);
-        //SPR_setVFlip(mi_sonic, FALSE);
-    }
-
-    //si no pulsamos
-    if ((!(value & BUTTON_RIGHT)) && (!(value & BUTTON_LEFT)))
-    {
-        SPR_setAnim(mi_sonic, ANIM_STAND);
-    }
-}
-
-//simplemente al llegar a un extremo el enemigo se da la vuelta
-static void mueveEnemigos()
-{
-    //velocidad de movimiento de los enemigos
-    int velocidadmovx = 1;
-    int acelerador = 1;     //modificador el mov sinoidal (CAMBIALO PARA PROBAR)
-    int mod_amplitud = 1;   //modificador el mov sinoidal (CAMBIALO PARA PROBAR)
-
-    //CANGREJO ( =enemigo[0] )
-    //movimiento horizontal simple. Al llegar a los extremos de la pantalla rebota.
-    enemigoPosx[0] += velocidadmovx * enemigoSentidoMovimiento;
-    if(enemigoPosx[0]>=320 || enemigoPosx[0]<=0) enemigoSentidoMovimiento *= -1;
-
-    //AVISPA ( =enemigo[1] )
-    //mov horizontal simple, no hay rebote, aparecerá por el otro lado de la pantalla
-    //movimiento vertical senoidal
-    enemigoPosx[1] -= velocidadmovx;
-    enemigoPosy[1] = CONST + sinFix16(enemigoPosx[1]* acelerador) * mod_amplitud;
-
-    //actualiza la posicion en el VDP
-    SPR_setPosition(enemigo[0], enemigoPosx[0], enemigoPosy[0]);
-    SPR_setPosition(enemigo[1], enemigoPosx[1], enemigoPosy[1]);
 
 }
 
+// reads joypad input, moves Sonic left/right, and flips the sprite accordingly
+static void handleInput( void ) {
 
-//Función pinta_posicion() : Escribe en pantalla la posición del sprite
-static void pinta_posicion( void )
-{
-    //declaramos una cadena de caracteres
-    //sprintf : pasa un valor numerico(posx / posy) a caracteres y los copia
-    //en la cadena anterior. %4d alinea a la derecha, importante para al pasar
-    //de numeros negativos a positivos todo salga correctamente
+    u16 value = JOY_readJoypad( JOY_1 );
 
-    char cadena1[32];
-    sprintf(cadena1, "Y(avispa):  %3d", enemigoPosy[1]);
-    VDP_drawText(cadena1, 2, 2);
+    if ( value & BUTTON_LEFT ) {
+        SPR_setPosition( sonicSprite, posx--, posy );
+        SPR_setHFlip( sonicSprite, TRUE );
+        SPR_setAnim( sonicSprite, ANIM_RUN );
+        // SPR_setVFlip( sonicSprite, TRUE );
+    }
+
+    if ( value & BUTTON_RIGHT ) {
+        SPR_setPosition( sonicSprite, posx++, posy );
+        SPR_setHFlip( sonicSprite, FALSE );
+        SPR_setAnim( sonicSprite, ANIM_RUN );
+        // SPR_setVFlip( sonicSprite, FALSE );
+    }
+
+    // no horizontal input — return to stand animation
+    if ( !( value & BUTTON_RIGHT ) && !( value & BUTTON_LEFT ) ) {
+        SPR_setAnim( sonicSprite, ANIM_STAND );
+    }
+
+}
+
+// moves both enemies each frame:
+//   crab  — simple horizontal bounce between screen edges
+//   wasp  — horizontal scroll with sinusoidal vertical movement
+static void moveEnemies( void ) {
+
+    int moveSpeed   = 1;
+    int sineSpeed   = 1; // affects how fast the sine wave cycles (try changing it)
+    int sineAmp     = 1; // affects the sine wave amplitude (try changing it)
+
+    // CRAB (enemy[0]) — horizontal bounce
+    enemyPosx[0] += moveSpeed * enemyDirection;
+    if ( enemyPosx[0] >= 320 || enemyPosx[0] <= 0 ) {
+        enemyDirection *= -1;
+    }
+
+    // WASP (enemy[1]) — scrolls left, wraps around; vertical position follows a sine wave
+    enemyPosx[1] -= moveSpeed;
+    enemyPosy[1] = SINE_BASELINE + sinFix16( enemyPosx[1] * sineSpeed ) * sineAmp;
+
+    // push updated positions to the VDP
+    SPR_setPosition( enemy[0], enemyPosx[0], enemyPosy[0] );
+    SPR_setPosition( enemy[1], enemyPosx[1], enemyPosy[1] );
+
+}
+
+// writes the wasp's current Y position to the screen
+// %3d right-aligns the value to keep the display stable when digits change
+static void drawPosition( void ) {
+
+    char buf[32];
+
+    sprintf( buf, "Y (wasp): %3d", enemyPosy[1] );
+    VDP_drawText( buf, 2, 2 );
 
 }

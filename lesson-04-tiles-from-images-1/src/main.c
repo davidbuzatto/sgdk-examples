@@ -1,6 +1,10 @@
 /**
- *      @Title:  Leccion 04 - "Tiles a partir de imagenes"
- *      @Author: Daniel Bustos "danibus"
+ * @file main.c
+ * @author Daniel Bustos "danibus"
+ * @brief Lesson 04 - "Tiles from Images (1)" example for SGDK.
+ *
+ * @note Reimplemented and updated to the latest SGDK API by
+ *       Prof. Dr. David Buzatto.
  */
 
 #include <genesis.h>
@@ -8,25 +12,27 @@
 
 int main( bool hard ) {
 
-    //para llevar la cuenta de tiles en VRAM
+    // tile counter in VRAM
     u16 ind;
 
-    //recoge la paleta de la imagen y la asigna a la PAL0
-    PAL_setPalette(PAL0, moon.palette->data, CPU);
+    // load the image palette and assign it to PAL0
+    PAL_setPalette( PAL0, moon.palette->data, CPU );
 
-    //reserva las primeras 16 posiciones de la VRAM, de la 0 a la 15 (ind = 16)
+    // reserve the first user-available VRAM positions
     ind = TILE_USER_INDEX;
 
-    // carga la imagen en VRAM y la dibuja en pantalla en la posici�n (3,3)
-    VDP_drawImageEx(BG_A, &moon, TILE_ATTR_FULL(PAL0, 0, 0, 0, ind), 3, 3, 0, CPU);
+    // load the image into VRAM and draw it at tile position (3, 3)
+    VDP_drawImageEx( BG_A, &moon, TILE_ATTR_FULL( PAL0, 0, 0, 0, ind ), 3, 3, 0, CPU );
 
-    //incrementa ind para 'apuntar' a una zona de VRAM libre para futuras tiles
+    // advance the tile counter to the next free VRAM slot
     ind += moon.tileset->numTile;
 
     while ( TRUE ) {
+
         SYS_doVBlankProcess();
+
     }
 
     return 0;
-    
+
 }
