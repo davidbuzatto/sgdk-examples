@@ -153,7 +153,7 @@ static void loadState( void ) {
 
         PAL_setPalette( PAL0, bgd_image.palette->data, CPU );
         PAL_setPalette( PAL0, bgc_image.palette->data, CPU );
-        PAL_setPalette( PAL0, nave_sprite.palette->data, CPU );
+        PAL_setPalette( PAL0, ship_sprite.palette->data, CPU );
 
         SPR_init();
 
@@ -174,10 +174,10 @@ static void loadState( void ) {
             enemyPosy[i] = 30  + i * 20;
         }
 
-        shipSprite = SPR_addSprite( &nave_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL0, TRUE, FALSE, FALSE ) );
+        shipSprite = SPR_addSprite( &ship_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL0, TRUE, FALSE, FALSE ) );
 
         for ( int i = 0; i < 6; i++ ) {
-            enemies[i] = SPR_addSprite( &enemigo_sprite, enemyPosx[i], enemyPosy[i], TILE_ATTR( PAL0, TRUE, FALSE, FALSE ) );
+            enemies[i] = SPR_addSprite( &enemy_sprite, enemyPosx[i], enemyPosy[i], TILE_ATTR( PAL0, TRUE, FALSE, FALSE ) );
         }
     }
 

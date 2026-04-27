@@ -8,7 +8,7 @@
  */
 
 #include <genesis.h>
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprite.h"
 
 #define ANIM_STAND  0
@@ -43,24 +43,24 @@ int main( bool hard ) {
     SPR_init();
 
     // load background palettes
-    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
-    PAL_setPalette( PAL1, fondo2.palette->data, CPU );
+    PAL_setPalette( PAL0, bg1.palette->data, CPU );
+    PAL_setPalette( PAL1, bg2.palette->data, CPU );
 
     // load both backgrounds into the VDP
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo1.tileset->numTile;
-    VDP_drawImageEx( BG_B, &fondo2, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo2.tileset->numTile;
+    VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg1.tileset->numTile;
+    VDP_drawImageEx( BG_B, &bg2, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg2.tileset->numTile;
 
     // load sprite palettes
-    PAL_setPalette( PAL2, mi_sprite_ryu.palette->data, CPU );
-    PAL_setPalette( PAL3, mi_sprite_sombra.palette->data, CPU );
+    PAL_setPalette( PAL2, ryu_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, shadow_sprite.palette->data, CPU );
 
     // add sprites
-    ryuSprite    = SPR_addSprite( &mi_sprite_ryu,    posx,          posy,          TILE_ATTR( PAL2, TRUE,               FALSE, FALSE ) );
-    shadowSprite = SPR_addSprite( &mi_sprite_sombra, posx,          posy + 70,     TILE_ATTR( PAL3, TRUE,               FALSE, FALSE ) );
-    hadokenSprite= SPR_addSprite( &mi_sprite_hadoken, hadokenPosx,  hadokenPosy,   TILE_ATTR( PAL3, hadokenPriority,    FALSE, FALSE ) );
+    ryuSprite    = SPR_addSprite( &ryu_sprite,    posx,          posy,          TILE_ATTR( PAL2, TRUE,               FALSE, FALSE ) );
+    shadowSprite = SPR_addSprite( &shadow_sprite, posx,          posy + 70,     TILE_ATTR( PAL3, TRUE,               FALSE, FALSE ) );
+    hadokenSprite= SPR_addSprite( &hadoken_sprite, hadokenPosx,  hadokenPosy,   TILE_ATTR( PAL3, hadokenPriority,    FALSE, FALSE ) );
 
     // enable shadow/highlight mode
     VDP_setHilightShadow( 1 );

@@ -9,7 +9,7 @@
 
 #include <genesis.h>
 
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprite.h"
 
 // sprite animations
@@ -59,7 +59,7 @@ int main( bool hard ) {
     }
 
     // pointer to the priority map image tilemap
-    TileMap *shadowTilemap = bg_prioridad.tilemap;
+    TileMap *shadowTilemap = bg_priority.tilemap;
 
     // start from the last tile and work backwards
     u16 numTiles = SCENARIO_NUM_TILES;
@@ -105,12 +105,12 @@ int main( bool hard ) {
     PAL_setPalette( PAL0, (u16 *) bg_B_real.palette->data, CPU );
 
     // palettes from the sprite sheets
-    PAL_setPalette( PAL1, (u16 *) mi_sprite_ryu.palette->data, CPU );
-    PAL_setPalette( PAL3, (u16 *) mi_sprite_hadoken.palette->data, CPU );
+    PAL_setPalette( PAL1, (u16 *) ryu_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, (u16 *) hadoken_sprite.palette->data, CPU );
 
-    ryuSprite     = SPR_addSprite( &mi_sprite_ryu,     ryuPosx,      ryuPosy,          TILE_ATTR( PAL1, FALSE, FALSE, FALSE ) );
-    shadowSprite  = SPR_addSprite( &mi_sprite_sombra,  ryuPosx,      ryuPosy + 70,     TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
-    hadokenSprite = SPR_addSprite( &mi_sprite_hadoken,  hadokenPosx,  hadokenPosy,     TILE_ATTR( PAL3, TRUE,  FALSE, FALSE ) );
+    ryuSprite     = SPR_addSprite( &ryu_sprite,     ryuPosx,      ryuPosy,          TILE_ATTR( PAL1, FALSE, FALSE, FALSE ) );
+    shadowSprite  = SPR_addSprite( &shadow_sprite,  ryuPosx,      ryuPosy + 70,     TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
+    hadokenSprite = SPR_addSprite( &hadoken_sprite,  hadokenPosx,  hadokenPosy,     TILE_ATTR( PAL3, TRUE,  FALSE, FALSE ) );
 
     // enable shadow/highlight mode
     VDP_setHilightShadow( 1 );

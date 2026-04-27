@@ -9,7 +9,7 @@
 
 #include <genesis.h>
 #include "sprites.h"
-#include "fondos.h"
+#include "backgrounds.h"
 
 // ship sprite animation indices
 #define SHIP_IDLE             0
@@ -155,7 +155,7 @@ static void spawnPlayerBullet( int type ) {
             playerBullets[i].y      = ship.y + 15;
             playerBullets[i].type   = type;
             playerBullets[i].sprite = SPR_addSprite(
-                &bala_sprite,
+                &bullet_sprite,
                 playerBullets[i].x,
                 playerBullets[i].y,
                 TILE_ATTR( PAL0, TRUE, FALSE, FALSE )
@@ -261,7 +261,7 @@ static void spawnBossBullet( void ) {
             bossBullets[i].x      = 220;
             bossBullets[i].y      = ( ( ( random() % 200 ) - 1 ) + 1 );
             bossBullets[i].sprite = SPR_addSprite(
-                &bala_sprite,
+                &bullet_sprite,
                 bossBullets[i].x,
                 bossBullets[i].y,
                 TILE_ATTR( PAL0, TRUE, FALSE, FALSE )
@@ -448,18 +448,18 @@ int main( bool hard ) {
 
     SPR_init();
 
-    PAL_setPalette( PAL0, nave_sprite.palette->data, CPU );
+    PAL_setPalette( PAL0, ship_sprite.palette->data, CPU );
 
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx( BG_B, &fondo2, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo2.tileset->numTile;
-    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE,  FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo1.tileset->numTile;
+    VDP_drawImageEx( BG_B, &bg2, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg2.tileset->numTile;
+    VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, TRUE,  FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg1.tileset->numTile;
 
     VDP_setScrollingMode( HSCROLL_PLANE, VSCROLL_PLANE );
     int scrollOffset = 0;
 
-    ship.sprite = SPR_addSprite( &nave_sprite, ship.x, ship.y, TILE_ATTR( PAL0, TRUE, FALSE, FALSE ) );
+    ship.sprite = SPR_addSprite( &ship_sprite, ship.x, ship.y, TILE_ATTR( PAL0, TRUE, FALSE, FALSE ) );
 
     VDP_drawText( "      BULLET HELL HELP    ", 1, 1 );
     VDP_drawText( "PAD - Controls, A/B: Fire ", 2, 2 );

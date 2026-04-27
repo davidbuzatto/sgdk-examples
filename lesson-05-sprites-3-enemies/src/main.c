@@ -9,7 +9,7 @@
 
 #include <genesis.h>
 
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprites.h"
 
 #define ANIM_STAND  0
@@ -48,17 +48,17 @@ int main( bool hard ) {
     SPR_init();
 
     // load background palettes
-    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
-    PAL_setPalette( PAL1, fondo2.palette->data, CPU );
+    PAL_setPalette( PAL0, bg1.palette->data, CPU );
+    PAL_setPalette( PAL1, bg2.palette->data, CPU );
 
     // load background images into the VDP
     ind = TILE_USER_INDEX;
 
-    VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo1.tileset->numTile;
+    VDP_drawImageEx( BG_B, &bg1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg1.tileset->numTile;
 
-    VDP_drawImageEx( BG_A, &fondo2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo2.tileset->numTile;
+    VDP_drawImageEx( BG_A, &bg2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg2.tileset->numTile;
 
     // load the Sonic palette into PAL2
     PAL_setPalette( PAL2, sonic_sprite.palette->data, CPU );

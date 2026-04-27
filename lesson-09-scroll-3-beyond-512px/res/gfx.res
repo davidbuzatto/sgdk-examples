@@ -1,4 +1,5 @@
-IMAGE bg_image "gfx/fondo1024x224px.png" NONE
+IMAGE bg_image "gfx/bg1024x224px.png" NONE
+
 
 
 

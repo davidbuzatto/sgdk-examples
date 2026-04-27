@@ -8,7 +8,7 @@
  */
 
 #include <genesis.h>
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprite.h"
 #include <sys.h>
 
@@ -46,24 +46,24 @@ int main( bool hard ) {
     SPR_init();
 
     // load the background palette into PAL0
-    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
+    PAL_setPalette( PAL0, bg1.palette->data, CPU );
 
     // load the background into the VDP
     ind = TILE_USER_INDEX;
-    // VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    // ind += fondo1.tileset->numTile;
-    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo1.tileset->numTile;
+    // VDP_drawImageEx( BG_B, &bg1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    // ind += bg1.tileset->numTile;
+    VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg1.tileset->numTile;
 
     // load the Sonic palette into PAL1
     PAL_setPalette( PAL1, sonic_sprite.palette->data, CPU );
 
     // load the bar palette into PAL2 and PAL3
-    PAL_setPalette( PAL2, barra_sprite.palette->data, CPU );
-    PAL_setPalette( PAL3, barra_sprite.palette->data, CPU );
+    PAL_setPalette( PAL2, bar_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, bar_sprite.palette->data, CPU );
 
     // add the bar sprite
-    barSprite = SPR_addSprite( &barra_sprite, barPosx, barPosy, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
+    barSprite = SPR_addSprite( &bar_sprite, barPosx, barPosy, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
 
     // add the Sonic sprite
     sonicSprite = SPR_addSprite( &sonic_sprite, sonicPosx, sonicPosy, TILE_ATTR( PAL1, FALSE, FALSE, FALSE ) );
@@ -171,8 +171,8 @@ void myJoyHandler( u16 joy, u16 changed, u16 state ) {
         if ( state == 5 && ( changed & BUTTON_C ) ) {
             state = 6;
             ind = TILE_USER_INDEX;
-            VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-            ind += fondo2.tileset->numTile;
+            VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+            ind += bg2.tileset->numTile;
             VDP_drawText( "TEST 06", 1, 0 );
             VDP_drawText( "-Press A to continue-", 1, 27 );
             SPR_setPriority( sonicSprite, FALSE );

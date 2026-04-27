@@ -9,7 +9,7 @@
 
 #include <genesis.h>
 
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprites.h"
 
 #define ANIM_STAND   0
@@ -42,14 +42,14 @@ int main( bool hard ) {
     // BACKGROUND
 
     // load the background palette into PAL1
-    PAL_setPalette( PAL1, fondo2.palette->data, CPU );
+    PAL_setPalette( PAL1, bg2.palette->data, CPU );
 
     // start loading tiles from VRAM position 1
     ind = 1;
 
     // load the background image into plane B
-    VDP_drawImageEx( BG_B, &fondo2, TILE_ATTR_FULL( PAL1, 1, 0, 0, ind ), 0, 0, 1, CPU );
-    ind += fondo2.tileset->numTile;
+    VDP_drawImageEx( BG_B, &bg2, TILE_ATTR_FULL( PAL1, 1, 0, 0, ind ), 0, 0, 1, CPU );
+    ind += bg2.tileset->numTile;
 
     // SPRITES
 

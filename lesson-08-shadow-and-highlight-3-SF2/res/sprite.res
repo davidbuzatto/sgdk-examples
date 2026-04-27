@@ -1,3 +1,3 @@
-SPRITE mi_sprite_ryu    "sprite/ryu SF2.png" 5 10 FAST 12
-SPRITE mi_sprite_sombra "sprite/sombra.png" 5 2 FAST 0
-SPRITE mi_sprite_hadoken "sprite/hadoken.png" 4 4 FAST 12
+SPRITE ryu_sprite    "sprite/ryu SF2.png" 5 10 FAST 12
+SPRITE shadow_sprite "sprite/shadow.png" 5 2 FAST 0
+SPRITE hadoken_sprite "sprite/hadoken.png" 4 4 FAST 12

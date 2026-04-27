@@ -9,7 +9,7 @@
 
 #include <genesis.h>
 
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprites.h"
 #include "tools.h"
 #include "joy.h"
@@ -106,15 +106,15 @@ int main( bool hard ) {
     SPR_init();
 
     // load background palettes
-    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
-    PAL_setPalette( PAL1, fondo2.palette->data, CPU );
+    PAL_setPalette( PAL0, bg1.palette->data, CPU );
+    PAL_setPalette( PAL1, bg2.palette->data, CPU );
 
     // load both backgrounds into the VDP
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo1.tileset->numTile;
-    VDP_drawImageEx( BG_A, &fondo2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo2.tileset->numTile;
+    VDP_drawImageEx( BG_B, &bg1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg1.tileset->numTile;
+    VDP_drawImageEx( BG_A, &bg2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg2.tileset->numTile;
 
     // load the Morris palette into PAL2
     PAL_setPalette( PAL2, morris_sprite.palette->data, CPU );
@@ -125,10 +125,10 @@ int main( bool hard ) {
     // OPTIONAL: enemigoSentidoMovimiento = 1;
 
     // load the Death palette into PAL3
-    PAL_setPalette( PAL3, muerte_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, death_sprite.palette->data, CPU );
 
     // add Death sprite
-    deathSprite = SPR_addSprite( &muerte_sprite, deathX, deathY, TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
+    deathSprite = SPR_addSprite( &death_sprite, deathX, deathY, TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
 
     // set Death's initial animation
     SPR_setAnim( deathSprite, ANIM_DEATH_NORMAL );
@@ -266,18 +266,18 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
         // (only those specific tiles get priority, not the entire background)
         if ( state == 3 && ( changed & BUTTON_A ) ) {
             state = 4;
-            VDP_drawImageEx( BG_B, &fondo3, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 14, 4, FALSE, TRUE );
-            ind += fondo3.tileset->numTile;
+            VDP_drawImageEx( BG_B, &bg3, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 14, 4, FALSE, TRUE );
+            ind += bg3.tileset->numTile;
         }
 
         // STATE 5: redraw both backgrounds with high priority — everything at normal brightness
         if ( state == 4 && ( changed & BUTTON_B ) ) {
             state = 5;
             ind = TILE_USER_INDEX;
-            VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-            ind += fondo1.tileset->numTile;
-            VDP_drawImageEx( BG_A, &fondo2, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-            ind += fondo2.tileset->numTile;
+            VDP_drawImageEx( BG_B, &bg1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+            ind += bg1.tileset->numTile;
+            VDP_drawImageEx( BG_A, &bg2, TILE_ATTR_FULL( PAL1, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+            ind += bg2.tileset->numTile;
         }
 
         // STATE 6: remove all priorities; switch Death to color-index-13 animation
@@ -285,10 +285,10 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
         if ( state == 5 && ( changed & BUTTON_C ) ) {
             state = 6;
             ind = TILE_USER_INDEX;
-            VDP_drawImageEx( BG_B, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-            ind += fondo1.tileset->numTile;
-            VDP_drawImageEx( BG_A, &fondo2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-            ind += fondo2.tileset->numTile;
+            VDP_drawImageEx( BG_B, &bg1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+            ind += bg1.tileset->numTile;
+            VDP_drawImageEx( BG_A, &bg2, TILE_ATTR_FULL( PAL1, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+            ind += bg2.tileset->numTile;
             SPR_setPriority( morrisSprite, FALSE );
             SPR_setAnim( deathSprite, ANIM_DEATH_COLOR13 );
             SPR_setPriority( morrisSprite, FALSE );
@@ -328,7 +328,7 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
             PAL_setPalette( PAL2, morris_sprite.palette->data, CPU );
             morrisSprite = SPR_addSprite( &morris_sprite, morrisX, morrisY, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
 
-            deathSprite = SPR_addSprite( &muerte_sprite, deathX, deathY, TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
+            deathSprite = SPR_addSprite( &death_sprite, deathX, deathY, TILE_ATTR( PAL3, FALSE, FALSE, FALSE ) );
             SPR_setAnim( deathSprite, ANIM_DEATH_NORMAL );
 
             // reset sprite positions in case the user moved them off-screen
@@ -346,7 +346,7 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
             }
 
             // pointer to the priority-map image's tilemap (not the image itself)
-            TileMap *shadowTilemap = fondo_doble_prioridad.tilemap;
+            TileMap *shadowTilemap = bg_double_priority.tilemap;
             u16 numTiles = SCENARIO_NUM_TILES;
 
             // Walk every tile. If the priority-map tile is non-zero, set the
@@ -364,11 +364,11 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
             }
 
             // load the real background into plane B
-            PAL_setPalette( PAL0, fondo_doble.palette->data, CPU );
+            PAL_setPalette( PAL0, bg_double.palette->data, CPU );
 
             ind = TILE_USER_INDEX;
-            VDP_drawImageEx( BG_B, &fondo_doble, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-            ind += fondo_doble.tileset->numTile;
+            VDP_drawImageEx( BG_B, &bg_double, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+            ind += bg_double.tileset->numTile;
 
             // upload the priority tilemap to plane A
             VDP_setTileMapDataRectEx(
@@ -376,7 +376,7 @@ void myJoyHandler( u16 joy, u16 changed, u16 joyState ) {
                 SCENARIO_POS_X, SCENARIO_POS_Y,
                 SCENARIO_WIDTH_TILES, SCENARIO_HEIGHT_TILES, SCENARIO_WIDTH_TILES, CPU
             );
-            ind += fondo_doble_prioridad.tileset->numTile;
+            ind += bg_double_priority.tileset->numTile;
 
             VDP_setHilightShadow( 1 );
         }

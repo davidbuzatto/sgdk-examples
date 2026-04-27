@@ -8,7 +8,7 @@
  */
 
 #include <genesis.h>
-#include "fondos.h"
+#include "backgrounds.h"
 #include "sprite.h"
 
 // circle sprite animation indices
@@ -51,22 +51,22 @@ int main( bool hard ) {
     SPR_init();
 
     // load the background palette into PAL0
-    PAL_setPalette( PAL0, fondo1.palette->data, CPU );
+    PAL_setPalette( PAL0, bg1.palette->data, CPU );
 
     // load the background into the VDP
     ind = TILE_USER_INDEX;
-    VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-    ind += fondo1.tileset->numTile;
+    VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+    ind += bg1.tileset->numTile;
 
     // load the Sonic palette into PAL1
     PAL_setPalette( PAL1, sonic_sprite.palette->data, CPU );
 
     // load the circle palette into PAL2 and PAL3
-    PAL_setPalette( PAL2, circulo_sprite.palette->data, CPU );
-    PAL_setPalette( PAL3, circulo_sprite.palette->data, CPU );
+    PAL_setPalette( PAL2, circle_sprite.palette->data, CPU );
+    PAL_setPalette( PAL3, circle_sprite.palette->data, CPU );
 
     // add the circle sprite
-    targetSprite = SPR_addSprite( &circulo_sprite, targetPosx, targetPosy, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
+    targetSprite = SPR_addSprite( &circle_sprite, targetPosx, targetPosy, TILE_ATTR( PAL2, FALSE, FALSE, FALSE ) );
     SPR_setAnim( targetSprite, CIRCLE14 );
 
     // add the Sonic sprite
@@ -181,13 +181,13 @@ void myJoyHandler( u16 joy, u16 changed, u16 state ) {
             if ( shBgPriority ) {
                 shBgPriority = 0;
                 ind = TILE_USER_INDEX;
-                VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-                ind += fondo1.tileset->numTile;
+                VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, FALSE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+                ind += bg1.tileset->numTile;
             } else {
                 shBgPriority = 1;
                 ind = TILE_USER_INDEX;
-                VDP_drawImageEx( BG_A, &fondo1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
-                ind += fondo1.tileset->numTile;
+                VDP_drawImageEx( BG_A, &bg1, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, ind ), 0, 0, FALSE, TRUE );
+                ind += bg1.tileset->numTile;
             }
         }
 

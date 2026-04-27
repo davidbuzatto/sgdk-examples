@@ -73,10 +73,10 @@ int main( bool hard ) {
 
     SPR_init();
 
-    PAL_setPalette( PAL1, bala_sprite.palette->data, CPU );
+    PAL_setPalette( PAL1, bullet_sprite.palette->data, CPU );
 
-    bulletSprite  = SPR_addSprite( &bala_sprite, bulletPosx,  bulletPosy,  TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
-    bulletSprite2 = SPR_addSprite( &bala_sprite, bullet2Posx, bullet2Posx, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    bulletSprite  = SPR_addSprite( &bullet_sprite, bulletPosx,  bulletPosy,  TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    bulletSprite2 = SPR_addSprite( &bullet_sprite, bullet2Posx, bullet2Posx, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
     VDP_drawText( "HW AND DISTANCE COLLISION        ", 2, 3  );
     VDP_drawText( "A - HW VDP collision bit         ", 2, 4  );
@@ -134,7 +134,7 @@ int main( bool hard ) {
 
     bulletPosx = 100;
     bulletPosy = 100;
-    bulletSprite = SPR_addSprite( &bala_sprite, bulletPosx, bulletPosy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    bulletSprite = SPR_addSprite( &bullet_sprite, bulletPosx, bulletPosy, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
     PAL_setPalette( PAL2, sonic_sprite.palette->data, CPU );
 
@@ -174,7 +174,7 @@ int main( bool hard ) {
     for ( int i = 0; i < MAX_BULLETS; i++ ) {
         bulletsPosx[i] = random() % 320;
         bulletsPosy[i] = random() % 224;
-        bullets[i] = SPR_addSprite( &bala_sprite, bulletsPosx[i], bulletsPosy[i], TILE_ATTR( PAL2, TRUE, FALSE, FALSE ) );
+        bullets[i] = SPR_addSprite( &bullet_sprite, bulletsPosx[i], bulletsPosy[i], TILE_ATTR( PAL2, TRUE, FALSE, FALSE ) );
     }
 
     sonicPosx = 100;

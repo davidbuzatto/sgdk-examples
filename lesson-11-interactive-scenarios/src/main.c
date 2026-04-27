@@ -19,7 +19,7 @@
 
 #include <genesis.h>
 #include "sprite.h"
-#include "fondos.h"
+#include "backgrounds.h"
 #include <sys.h>
 
 #define OFF_SCREEN        -100  // position used to hide sprites outside the visible area
@@ -86,8 +86,8 @@ int main( bool hard ) {
     VDP_setScreenWidth320();
     VDP_setScreenHeight224();
 
-    PAL_setPalette( PAL0, fondo01_01.palette->data, CPU );
-    PAL_setPalette( PAL1, sprite_mira.palette->data, CPU );
+    PAL_setPalette( PAL0, bg01_01.palette->data, CPU );
+    PAL_setPalette( PAL1, aim_sprite.palette->data, CPU );
     // PAL2 is left at the SGDK default (greens)
     PAL_setPalette( PAL3, palette_red, CPU );
 
@@ -134,14 +134,14 @@ void createLevel( void ) {
 
     tileStart = 1;
 
-    VDP_drawImageEx( BG_B, &fondo01_01, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileStart ), 0, 0, FALSE, TRUE );
-    tileFinalBgB += fondo01_01.tileset->numTile;
+    VDP_drawImageEx( BG_B, &bg01_01, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileStart ), 0, 0, FALSE, TRUE );
+    tileFinalBgB += bg01_01.tileset->numTile;
 
-    towerMap = unpackTileMap( fondo01_01_torres.tilemap, NULL );
-    VDP_loadTileSet( fondo01_01_torres.tileset, tileFinalBgB, CPU );
+    towerMap = unpackTileMap( bg01_01_towers.tilemap, NULL );
+    VDP_loadTileSet( bg01_01_towers.tileset, tileFinalBgB, CPU );
     VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 0, 0, 10, 11 );
     VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), 31, 4, 0, 0, 10, 11 );
-    tileFinalBgA += fondo01_01.tileset->numTile;
+    tileFinalBgA += bg01_01.tileset->numTile;
 
     SYS_enableInts();
 
@@ -155,7 +155,7 @@ void createAim( void ) {
     aim.movx = 2;
     aim.movy = 2;
 
-    aim.sprite = SPR_addSprite( &sprite_mira, aim.x, aim.y, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
+    aim.sprite = SPR_addSprite( &aim_sprite, aim.x, aim.y, TILE_ATTR( PAL1, TRUE, FALSE, FALSE ) );
 
 }
 
@@ -348,24 +348,24 @@ void updateScenery( void ) {
 
         if ( tower[0].health < 40 && tower[0].state == 0 ) {
             tower[0].state = 1;
-            towerMap = unpackTileMap( fondo01_01_torres.tilemap, NULL );
-            VDP_loadTileSet( fondo01_01_torres.tileset, tileFinalBgB, CPU );
+            towerMap = unpackTileMap( bg01_01_towers.tilemap, NULL );
+            VDP_loadTileSet( bg01_01_towers.tileset, tileFinalBgB, CPU );
             VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 10, 0, 10, 11 );
-            tileFinalBgA += fondo01_01.tileset->numTile;
+            tileFinalBgA += bg01_01.tileset->numTile;
         }
 
         if ( tower[0].health < 20 && tower[0].state == 1 ) {
             tower[0].state = 2;
             VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), -1, 3, 20, 0, 10, 11 );
-            tileFinalBgA += fondo01_01.tileset->numTile;
+            tileFinalBgA += bg01_01.tileset->numTile;
         }
 
         if ( tower[1].health < 40 && tower[1].state == 0 ) {
             tower[1].state = 1;
-            towerMap = unpackTileMap( fondo01_01_torres.tilemap, NULL );
-            VDP_loadTileSet( fondo01_01_torres.tileset, tileFinalBgB, CPU );
+            towerMap = unpackTileMap( bg01_01_towers.tilemap, NULL );
+            VDP_loadTileSet( bg01_01_towers.tileset, tileFinalBgB, CPU );
             VDP_setMapEx( BG_A, towerMap, TILE_ATTR_FULL( PAL0, TRUE, FALSE, FALSE, tileFinalBgB ), 31, 4, 10, 0, 10, 11 );
-            tileFinalBgA += fondo01_01.tileset->numTile;
+            tileFinalBgA += bg01_01.tileset->numTile;
         }
 
         if ( tower[1].health < 20 && tower[1].state == 1 ) {
@@ -389,7 +389,7 @@ void createPlayerShot( void ) {
     playerShot.x      = OFF_SCREEN;
     playerShot.y      = OFF_SCREEN;
     playerShot.sprite = SPR_addSprite(
-        &sprite_bala_player,
+        &player_bullet_sprite,
         playerShot.x,
         playerShot.y,
         TILE_ATTR( PAL1, TRUE, FALSE, FALSE )
